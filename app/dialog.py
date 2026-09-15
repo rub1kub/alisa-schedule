@@ -17,10 +17,11 @@ from app.language import (
     parse_date,
     requested_label,
 )
-from app.models import College, Group, ScheduleResult
+from app.models import College, Group, ScheduleResult, TeacherScheduleResult
 from app.protocol import AliceRequest
 from app.providers import NotPublished, ProviderError, ScheduleProvider, plain
 from app.responses import LessonLabel, Responses, lesson_label
+from app.teachers import surname, teacher_matches, teacher_query
 
 Kind = Literal["schedule", "first", "count"]
 
@@ -29,11 +30,17 @@ class Memory(BaseModel):
     model_config = ConfigDict(extra="ignore")
     group_id: str | None = Field(default=None, max_length=200)
     awaiting_group: bool = False
+    temporary_group: bool = False
+    query_group_id: str | None = Field(default=None, max_length=200)
+    query_teacher_id: str | None = Field(default=None, max_length=200)
+    awaiting_teacher: bool = False
+    awaiting_date: bool = False
+    auto_exit: bool | None = None
     pending_kind: Kind | None = None
     pending_date: date | None = None
     last_kind: Kind | None = None
     last_date: date | None = None
-    view: Literal["schedule", "groups"] | None = None
+    view: Literal["schedule", "groups", "teacher"] | None = None
     cursor: int = Field(default=0, ge=0, le=50000)
     digest: str = Field(default="", max_length=16)
     announce_group: bool = False
@@ -53,6 +60,8 @@ def memory_from(request: AliceRequest) -> Memory:
         if isinstance(value, str) and 0 < len(value) <= 200:
             memory.group_id = value
     preference = state.get("lesson_label")
+    if memory.auto_exit is None and type(state.get("auto_exit")) is bool:
+        memory.auto_exit = state["auto_exit"]
     if (
         memory.lesson_label is None
         and isinstance(preference, str)
@@ -89,6 +98,8 @@ def answer(
         result["response"]["buttons"] = buttons or []
     if persist:
         preferences = {"lesson_label": memory.lesson_label} if memory.lesson_label else {}
+        if memory.auto_exit is not None:
+            preferences["auto_exit"] = memory.auto_exit
         if request.session.authorized:
             result["user_state_update"] = {"group_id": memory.group_id, **preferences}
         else:
@@ -170,6 +181,47 @@ def schedule_text(
     return " ".join(lines)
 
 
+def teacher_schedule_text(result: TeacherScheduleResult, kind: Kind, responses: Responses) -> str:
+    text, options = responses.text, responses.options
+    lines = [text("teacher_header", teacher=plain(surname(result.teacher_id)))]
+    for enabled, key in (
+        (result.demo, "demo"),
+        (result.stale, "stale"),
+        (result.source == "override", "replacement"),
+        (result.partial, "teacher_partial"),
+    ):
+        if enabled:
+            lines.append(text(key))
+    if options.date_format != "none":
+        lines.append(
+            text("date_header", date=date_label(result.date, full=options.date_format == "full"))
+        )
+    lessons = sorted(result.lessons, key=lambda item: (item.number, item.groups, item.subgroup))
+    if not lessons:
+        return " ".join([*lines, text("teacher_partial_empty" if result.partial else "day_empty")])
+    if kind != "first":
+        lines.append(text("day_count", count=pair_count(len({item.number for item in lessons}))))
+    if kind == "count":
+        return " ".join(lines)
+    if kind == "first":
+        lessons = [item for item in lessons if item.number == lessons[0].number]
+    time_mode = options.first_time if kind == "first" else options.schedule_time
+    # One period with several groups counts once, but every group remains audible.
+    for lesson in lessons:
+        label = ", ".join(plain(group) for group in lesson.groups)
+        if options.teacher_lesson_label == "both" and lesson.subject:
+            label += ", " + plain(lesson.subject)
+        parts = [text("teacher_lesson", number=lesson.number, label=label)]
+        if lesson.subgroup:
+            parts.append(plain(lesson.subgroup))
+        if time_mode == "range" and lesson.start and lesson.end:
+            parts.append(text("time_range", start=lesson.start, end=lesson.end))
+        elif time_mode == "start" and lesson.start:
+            parts.append(text("time_start", start=lesson.start))
+        lines.append(", ".join(parts) + ".")
+    return " ".join(lines)
+
+
 class Skill:
     def __init__(
         self, provider: ScheduleProvider, college: College, responses: Responses, now=None
@@ -190,12 +242,16 @@ class Skill:
         return answer(request, memory, text, **kwargs)
 
     def failure(self, request: AliceRequest):
+        memory = memory_from(request)
         return self.reply(
             request,
-            memory_from(request),
+            memory,
             self.text("failure"),
-            end=self.responses.options.auto_exit,
+            end=self.auto_exit(memory),
         )
+
+    def auto_exit(self, memory: Memory) -> bool:
+        return self.responses.options.auto_exit if memory.auto_exit is None else memory.auto_exit
 
     def ask_group(self, request, memory, groups, prompt="ask_group", persist=False):
         examples = groups[:3]
@@ -214,6 +270,84 @@ class Skill:
                 *[button(g.name, action="select_group", group_id=g.id) for g in examples],
                 button(self.text("button_groups"), action="groups"),
             ],
+        )
+
+    async def handle_teacher(self, request, memory, command, intent, selection):
+        kind = intent if intent in {"schedule", "first", "count"} else None
+        more = intent == "more" and memory.view == "teacher"
+        selected_id = request.request.payload.get("teacher_id")
+        try:
+            teachers = await self.provider.teachers()
+        except ProviderError:
+            return self.failure(request)
+        teachers = [
+            item.model_copy(
+                update={"aliases": [*item.aliases, *self.college.teacher_aliases.get(item.id, [])]}
+            )
+            for item in teachers
+        ]
+        fragment = teacher_query(command)
+        lookup = fragment is not None or memory.awaiting_teacher or selected_id is not None
+        if lookup:
+            matches = teacher_matches(command, teachers)
+            if selected_id is not None:
+                matches = [item for item in teachers if item.id == selected_id]
+            if len(matches) != 1:
+                memory.awaiting_teacher = True
+                memory.awaiting_group = False
+                memory.query_teacher_id = None
+                memory.query_group_id = None
+                memory.pending_kind = kind or memory.pending_kind or "schedule"
+                memory.pending_date = selection.value or memory.pending_date
+                memory.cursor = 0
+                memory.view = "teacher"
+                prompt = "ambiguous_teacher" if matches else "unknown_teacher"
+                if len({surname(item.name) for item in matches}) > 1:
+                    prompt = "multiple_teachers"
+                if fragment == "":
+                    prompt = "ask_teacher"
+                return self.reply(request, memory, self.text(prompt), buttons=[])
+            teacher = matches[0]
+        else:
+            teacher = next((item for item in teachers if item.id == memory.query_teacher_id), None)
+            if teacher is None:
+                memory.awaiting_teacher = True
+                return self.reply(request, memory, self.text("ask_teacher"), buttons=[])
+        memory.query_teacher_id = teacher.id
+        memory.query_group_id = None
+        memory.awaiting_teacher = False
+        memory.awaiting_group = False
+        memory.temporary_group = False
+        kind = kind or memory.pending_kind or (memory.last_kind if more else "schedule")
+        memory.view = "teacher"
+        if selection.error or (memory.awaiting_date and not selection.value):
+            memory.awaiting_date = True
+            memory.pending_kind = kind
+            return self.reply(request, memory, self.text(selection.error or "date_required"))
+        target = selection.value or memory.pending_date
+        if target is None and (more or (kind in {"first", "count"} and not lookup)):
+            target = memory.last_date
+        target = target or self.now()
+        memory.awaiting_date = False
+        memory.pending_kind = None
+        memory.pending_date = None
+        memory.pending_label = None
+        memory.last_label = None
+        memory.last_date, memory.last_kind = target, kind
+        try:
+            result = await self.provider.teacher_day(teacher.id, target)
+            text = teacher_schedule_text(result, kind, self.responses)
+        except NotPublished:
+            text = self.text("teacher_not_published")
+        except ProviderError:
+            text = self.text("failure")
+        text = page(text, memory, more, self.responses)
+        return self.reply(
+            request,
+            memory,
+            text,
+            buttons=[button(self.text("button_more"), action="more")] if memory.cursor else [],
+            end=self.auto_exit(memory) and not memory.cursor,
         )
 
     async def handle(self, request: AliceRequest):
@@ -238,27 +372,68 @@ class Skill:
         if intent == "exit":
             return self.reply(request, memory, self.text("exit"), end=True)
         if intent == "help":
-            return self.reply(request, memory, self.text("help"))
+            return self.reply(request, memory, self.text("help"), end=self.auto_exit(memory))
         if intent == "forget":
             return self.reply(
-                request, Memory(lesson_label=memory.lesson_label), self.text("forget"), persist=True
+                request,
+                Memory(lesson_label=memory.lesson_label, auto_exit=memory.auto_exit),
+                self.text("forget"),
+                persist=True,
+            )
+        if intent in {"prefer_exit", "prefer_stay"}:
+            memory.auto_exit = intent == "prefer_exit"
+            return self.reply(
+                request, memory, self.text(intent), persist=True, end=self.auto_exit(memory)
             )
         if intent in {"prefer_subject", "prefer_teacher", "prefer_both", "prefer_auto"}:
             memory.lesson_label = intent.removeprefix("prefer_")
-            return self.reply(request, memory, self.text(intent), persist=True)
+            return self.reply(
+                request, memory, self.text(intent), persist=True, end=self.auto_exit(memory)
+            )
         if intent == "my_group":
             text = (
                 self.text("my_group", group=memory.group_id)
                 if memory.group_id
                 else self.text("no_group")
             )
-            return self.reply(request, memory, text)
+            return self.reply(
+                request, memory, text, end=bool(memory.group_id) and self.auto_exit(memory)
+            )
 
         selection = parse_date(command, utterance.nlu, self.now())
-        if selection.error:
-            return self.reply(request, memory, self.text(selection.error))
         if selection.value and abs((selection.value - self.now()).days) > 366:
-            return self.reply(request, memory, self.text("date_out_of_range"))
+            selection = type(selection)(error="date_out_of_range")
+        normalized = normalize(command)
+        own_group_reference = bool(re.search(r"\b(?:моей|нашей)\s+групп\w*\b", normalized))
+        explicit_group = bool(re.search(r"\bгрупп\w*", normalized)) and not own_group_reference
+        numeric_only = bool(re.fullmatch(r"\d+", number_words(command)))
+        numeric_owner = bool(re.search(r"\bу\s+\d+\b", number_words(command)))
+        numeric_schedule = bool(re.search(r"\bрасписание\s+\d+\b", number_words(command)))
+        group_target = (
+            explicit_group
+            or numeric_only
+            or numeric_owner
+            or numeric_schedule
+            or selected_id is not None
+        )
+        if group_target and teacher_query(command) is not None:
+            return self.reply(request, memory, self.text("one_target"), buttons=[])
+        teacher_followup = memory.view == "teacher" and (
+            intent in {"more", "first", "count"}
+            or (selection.value and intent in {None, "schedule"})
+            or memory.awaiting_date
+        )
+        if (
+            intent not in {"groups", "change"}
+            and not group_target
+            and (
+                teacher_query(command) is not None
+                or memory.awaiting_teacher
+                or teacher_followup
+                or action == "select_teacher"
+            )
+        ):
+            return await self.handle_teacher(request, memory, command, intent, selection)
         try:
             groups = await self.provider.groups()
         except ProviderError:
@@ -273,101 +448,136 @@ class Skill:
             memory.view = "groups"
             memory.awaiting_group = True
             return self.reply(
-                request,
-                memory,
-                result,
-                buttons=[button(self.text("button_more"), action="more")],
+                request, memory, result, buttons=[button(self.text("button_more"), action="more")]
             )
 
-        explicit_group = bool(re.search(r"\bгрупп\w*", normalize(command)))
-        numeric_only = bool(re.fullmatch(r"\d+", number_words(command)))
-        matches = group_matches(
-            command, groups, memory.awaiting_group or explicit_group or numeric_only
-        )
+        matches = group_matches(command, groups, memory.awaiting_group or group_target)
         if selected_id is not None:
             matches = [group_map[selected_id]] if selected_id in group_map else []
-
         kind = intent if intent in {"schedule", "first", "count"} else None
         query_label = requested_label(command)
         if selection.value and kind is None:
-            kind = "schedule"
+            kind = memory.pending_kind or "schedule"
+        save_requested = intent == "change" or bool(
+            re.search(r"\b(?:моя группа|учусь в группе)\b", normalized)
+        )
+        # A question about another group is a temporary target. Selecting one's own
+        # group, including the answer to onboarding, is the only persistent change.
+        if save_requested:
+            memory.temporary_group = False
+            memory.awaiting_group = False
+            memory.pending_kind = None
+            memory.pending_date = None
+            memory.pending_label = None
+        elif not memory.awaiting_group and (group_target or matches) and kind:
+            memory.temporary_group = True
         if len(matches) > 1:
             memory.pending_kind = kind or memory.pending_kind
             memory.pending_label = query_label or memory.pending_label
-            memory.pending_date = selection.value or memory.pending_date or self.now()
+            memory.pending_date = selection.value or memory.pending_date
             return self.ask_group(request, memory, matches, "ambiguous_group")
         persist = False
         if matches:
-            memory.group_id = matches[0].id
+            memory.query_group_id = matches[0].id
+            if not memory.temporary_group:
+                memory.group_id = matches[0].id
+                persist = True
             memory.awaiting_group = False
+            memory.awaiting_teacher = False
+            memory.query_teacher_id = None
             memory.cursor = 0
             memory.view = None
-            persist = True
             kind = kind or memory.pending_kind
             if not kind:
                 memory.pending_date = None
                 memory.last_date = None
                 memory.last_kind = None
-                return self.reply(
-                    request,
-                    memory,
-                    self.text("group_saved", group=plain(matches[0].name)),
-                    persist=True,
-                )
+                if not memory.temporary_group:
+                    return self.reply(
+                        request,
+                        memory,
+                        self.text("group_saved", group=plain(matches[0].name)),
+                        persist=True,
+                    )
+                kind = "schedule"
         elif intent == "change":
-            memory.pending_kind = None
-            memory.pending_date = None
-            memory.pending_label = None
+            memory.query_group_id = None
+            memory.query_teacher_id = None
+            memory.awaiting_teacher = False
+            memory.awaiting_date = False
             return self.ask_group(request, memory, groups)
-        elif selected_id is not None or explicit_group:
+        elif group_target:
             memory.pending_kind = kind
             memory.pending_label = query_label
-            memory.pending_date = selection.value or self.now()
+            memory.pending_date = selection.value
             return self.ask_group(request, memory, groups, "unknown_group")
         elif memory.awaiting_group and not kind:
             return self.ask_group(request, memory, groups, "group_not_understood")
 
-        if not memory.group_id or memory.awaiting_group:
+        more = intent == "more" and memory.view == "schedule"
+        continuing = (
+            more
+            or memory.awaiting_date
+            or (kind in {"first", "count"} and memory.view == "schedule")
+        )
+        query_group_id = memory.query_group_id if matches or continuing else memory.group_id
+        if not query_group_id or memory.awaiting_group:
             memory.pending_kind = kind or memory.pending_kind
             memory.pending_label = query_label or memory.pending_label
-            memory.pending_date = selection.value or memory.pending_date or self.now()
+            memory.pending_date = selection.value or memory.pending_date
             return self.ask_group(request, memory, groups)
-
-        more = intent == "more" and memory.view == "schedule"
         if more:
             kind = memory.last_kind
+        kind = kind or (memory.pending_kind if memory.awaiting_date else None)
+        if selection.error or (memory.awaiting_date and not selection.value):
+            memory.query_group_id = query_group_id
+            memory.awaiting_date = True
+            memory.pending_kind = kind or "schedule"
+            memory.pending_label = query_label or memory.pending_label
+            return self.reply(
+                request, memory, self.text(selection.error or "date_required"), persist=persist
+            )
         if not kind:
-            prompt = "welcome" if not normalize(command) else "unknown_request"
-            return self.reply(request, memory, self.text(prompt), persist=persist)
+            prompt = "welcome" if not normalized else "unknown_request"
+            return self.reply(
+                request,
+                memory,
+                self.text(prompt),
+                persist=persist,
+                end=bool(normalized) and self.auto_exit(memory),
+            )
         target = selection.value or memory.pending_date
-        if target is None and (kind in {"first", "count"} or more):
+        if target is None and continuing:
             target = memory.last_date
         target = target or self.now()
+        memory.awaiting_date = False
+        memory.awaiting_teacher = False
+        memory.query_teacher_id = None
+        memory.query_group_id = query_group_id
         memory.pending_kind = None
         memory.pending_date = None
         memory.last_date = target
         memory.last_kind = kind
         memory.view = "schedule"
         if not more:
-            memory.announce_group = persist
+            memory.announce_group = persist or query_group_id != memory.group_id
             memory.last_label = query_label or memory.pending_label
         memory.pending_label = None
+        memory.temporary_group = False
         try:
-            result = await self.provider.day(memory.group_id, target)
-            group = group_map[memory.group_id]
+            result = await self.provider.day(query_group_id, target)
+            group = group_map[query_group_id]
             label_mode = self.responses.label_mode(
                 self.college, group, memory.last_label or memory.lesson_label
             )
             text = schedule_text(result, group, kind, self.responses, label_mode)
         except NotPublished:
-            memory.cursor = 0
             text = self.text("not_published")
         except ProviderError:
-            memory.cursor = 0
             text = self.text("failure")
         if memory.announce_group and not self.responses.options.show_group:
             text = (
-                self.text("group_header", group=plain(group_map[memory.group_id].name)) + " " + text
+                self.text("group_header", group=plain(group_map[query_group_id].name)) + " " + text
             )
         text = page(text, memory, more, self.responses)
         buttons = None
@@ -382,5 +592,5 @@ class Skill:
             text,
             persist=persist,
             buttons=buttons,
-            end=self.responses.options.auto_exit and not memory.cursor,
+            end=self.auto_exit(memory) and not memory.cursor,
         )

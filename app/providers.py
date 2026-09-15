@@ -23,8 +23,12 @@ from app.models import (
     Overrides,
     ScheduleFile,
     ScheduleResult,
+    Teacher,
+    TeacherLesson,
+    TeacherScheduleResult,
     read_json,
 )
+from app.teachers import teacher_key, teacher_names
 
 
 class ProviderError(Exception):
@@ -44,6 +48,10 @@ class ScheduleProvider(Protocol):
 
     async def day(self, group_id: str, target: date) -> ScheduleResult: ...
 
+    async def teachers(self) -> list[Teacher]: ...
+
+    async def teacher_day(self, teacher_id: str, target: date) -> TeacherScheduleResult: ...
+
 
 def plain(text: str) -> str:
     return " ".join(re.sub(r"<[^>]*>", "", html.unescape(text)).split())
@@ -52,6 +60,7 @@ def plain(text: str) -> str:
 PAIR = re.compile(r"^[\s▪️•]*([1-9]|1[0-2])\s*пара\s*[–—-]\s*(.+)$", re.I)
 EMPTY_SUBJECTS = {"нет", "нет пары", "отмена", "отменена", "не будет"}
 ROOM = re.compile(r"^(?:\d[\w\s,./-]*|(?:ауд\.?|каб\.?|вц|иц|тир|с/з|спорт|акт)[\w\s,./-]*)$", re.I)
+GROUP_CODE = re.compile(r"\b\d{1,4}-[А-ЯЁA-Z0-9]+-[1-4][А-ЯЁA-Z]+\b", re.I)
 
 
 def parse_api_day(payload: Any, group_id: str, target: date, college: College) -> ScheduleResult:
@@ -101,6 +110,84 @@ def parse_api_day(payload: Any, group_id: str, target: date, college: College) -
             for index, lesson in enumerate(same_pair, 1):
                 lesson.subgroup = f"вариант {index}"
     return ScheduleResult(group_id=group_id, date=target, lessons=lessons, source="kkepik")
+
+
+def parse_api_teacher_day(
+    payload: Any, teacher_id: str, target: date, college: College
+) -> TeacherScheduleResult:
+    if not isinstance(payload, dict):
+        raise Unavailable("Invalid upstream object")
+    if payload.get("date") != target.strftime("%d.%m.%Y") or payload.get("teacher") != teacher_id:
+        raise Unavailable("Upstream teacher/date mismatch")
+    rows = payload.get("schedule")
+    if not isinstance(rows, list) or len(rows) > 100:
+        raise Unavailable("Invalid upstream schedule")
+    table = college.bells.get("saturday" if target.weekday() == 5 else "weekday", {})
+    lessons, seen = [], set()
+    for row in rows:
+        if not isinstance(row, str) or len(row) > 8000:
+            raise Unavailable("Invalid upstream line")
+        for raw in row.splitlines():
+            line = plain(raw)
+            if not line or line.casefold() == "совмещенные пары:":
+                continue
+            match = PAIR.fullmatch(line)
+            if not match:
+                raise Unavailable("Unrecognized upstream teacher pair")
+            number, detail = int(match[1]), match[2]
+            if detail.casefold().rstrip(".! ") in EMPTY_SUBJECTS:
+                continue
+            parts = re.split(r"\s+[–—-]\s+", detail)
+            group_part, *rest = parts
+            groups = list(dict.fromkeys(GROUP_CODE.findall(group_part)))
+            remainder = GROUP_CODE.sub("", group_part).strip(" ,;/+и")
+            if not groups or remainder:
+                raise Unavailable("Unrecognized upstream teacher groups")
+            while rest and ROOM.fullmatch(rest[-1]):
+                rest.pop()
+            if len(rest) > 1:
+                raise Unavailable("Unrecognized upstream teacher details")
+            subject = rest[0] if rest else ""
+            groups = [group for group in groups if group not in college.excluded_groups]
+            if not groups:
+                continue
+            key = number, tuple(sorted(groups)), subject
+            if key in seen:
+                continue
+            seen.add(key)
+            bell = table.get(str(number))
+            lessons.append(
+                TeacherLesson(
+                    number=number,
+                    groups=groups,
+                    subject=college.subject_aliases.get(subject, subject),
+                    start=bell.start if bell else None,
+                    end=bell.end if bell else None,
+                )
+            )
+    return TeacherScheduleResult(
+        teacher_id=teacher_id, date=target, lessons=lessons, source="kkepik"
+    )
+
+
+def teacher_lessons(days, teacher_id: str) -> list[TeacherLesson]:
+    result = []
+    for day in days:
+        for lesson in day.lessons:
+            if teacher_key(teacher_id) in {
+                teacher_key(name) for name in teacher_names(lesson.teacher)
+            }:
+                result.append(
+                    TeacherLesson(
+                        number=lesson.number,
+                        groups=[day.group_id],
+                        subject=lesson.subject,
+                        subgroup=lesson.subgroup,
+                        start=lesson.start,
+                        end=lesson.end,
+                    )
+                )
+    return result
 
 
 @dataclass
@@ -239,6 +326,38 @@ class KkepikProvider:
         )
         return value.model_copy(update={"stale": stale})
 
+    async def teachers(self) -> list[Teacher]:
+        async def load():
+            data = await self._get("/api/teachers")
+            names = data.get("teachers") if isinstance(data, dict) else None
+            if not isinstance(names, list) or not names or len(names) > 5000:
+                raise Unavailable("Teacher catalog unavailable")
+            if any(not isinstance(name, str) or not name.strip() for name in names):
+                raise Unavailable("Invalid teacher catalog")
+            return [
+                Teacher(id=name, name=name, aliases=self.college.teacher_aliases.get(name, []))
+                for name in sorted(set(names))
+            ]
+
+        value, _ = await self._cached(("teachers",), load, 600, 86400)
+        return value
+
+    async def teacher_day(self, teacher_id: str, target: date) -> TeacherScheduleResult:
+        async def load():
+            data = await self._get(
+                "/api/schedule/teacher",
+                {"teacher": teacher_id, "date": target.strftime("%d.%m.%Y")},
+            )
+            return parse_api_teacher_day(data, teacher_id, target, self.college)
+
+        value, stale = await self._cached(
+            ("teacher", teacher_id, target.isoformat()),
+            load,
+            self.settings.cache_ttl,
+            self.settings.stale_ttl,
+        )
+        return value.model_copy(update={"stale": stale})
+
 
 class JsonDocument:
     """Reload atomically replaced files; a broken update is reported, never hidden."""
@@ -280,6 +399,36 @@ class FileProvider:
                 return ScheduleResult(**day.model_dump(), source="file", demo=data.demo)
         raise NotPublished()
 
+    async def teachers(self):
+        try:
+            data = await asyncio.to_thread(self.document.read)
+        except (OSError, ValueError) as exc:
+            raise Unavailable("Schedule file invalid") from exc
+        names = {
+            name
+            for day in data.days
+            for lesson in day.lessons
+            for name in teacher_names(lesson.teacher)
+        }
+        return [Teacher(id=name, name=name) for name in sorted(names)]
+
+    async def teacher_day(self, teacher_id: str, target: date):
+        try:
+            data = await asyncio.to_thread(self.document.read)
+        except (OSError, ValueError) as exc:
+            raise Unavailable("Schedule file invalid") from exc
+        days = [day for day in data.days if day.date == target]
+        if not days:
+            raise NotPublished()
+        return TeacherScheduleResult(
+            teacher_id=teacher_id,
+            date=target,
+            lessons=teacher_lessons(days, teacher_id),
+            source="file",
+            demo=data.demo,
+            partial={day.group_id for day in days} != {group.id for group in data.groups},
+        )
+
 
 class WithOverrides:
     def __init__(self, upstream: ScheduleProvider, path: Path):
@@ -298,3 +447,50 @@ class WithOverrides:
             if day.group_id == group_id and day.date == target:
                 return ScheduleResult(**day.model_dump(), source="override")
         return await self.upstream.day(group_id, target)
+
+    async def teachers(self):
+        try:
+            data = await asyncio.to_thread(self.document.read)
+        except (OSError, ValueError) as exc:
+            raise Unavailable("Overrides invalid") from exc
+        catalog = {teacher_key(item.id): item for item in await self.upstream.teachers()}
+        for day in data.replacements:
+            for lesson in day.lessons:
+                for name in teacher_names(lesson.teacher):
+                    catalog.setdefault(teacher_key(name), Teacher(id=name, name=name))
+        return list(catalog.values())
+
+    async def teacher_day(self, teacher_id: str, target: date):
+        try:
+            data = await asyncio.to_thread(self.document.read)
+        except (OSError, ValueError) as exc:
+            raise Unavailable("Overrides invalid") from exc
+        days = [day for day in data.replacements if day.date == target]
+        additions = teacher_lessons(days, teacher_id)
+        try:
+            result = await self.upstream.teacher_day(teacher_id, target)
+        except NotPublished:
+            if not additions:
+                raise
+            return TeacherScheduleResult(
+                teacher_id=teacher_id,
+                date=target,
+                lessons=additions,
+                source="override",
+                partial=True,
+            )
+        if not days:
+            return result
+        replaced = {day.group_id for day in days}
+        lessons, changed = [], bool(additions)
+        for lesson in result.lessons:
+            groups = [group for group in lesson.groups if group not in replaced]
+            changed = changed or groups != lesson.groups
+            if groups:
+                lessons.append(lesson.model_copy(update={"groups": groups}))
+        return result.model_copy(
+            update={
+                "lessons": lessons + additions,
+                "source": "override" if changed else result.source,
+            }
+        )

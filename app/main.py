@@ -47,6 +47,11 @@ def create_app(settings: Settings | None = None, provider=None, now=None) -> Fas
                 app.state.catalog_ready = bool(await source.groups())
             except ProviderError:
                 logger.warning("Schedule catalog unavailable at startup")
+            if isinstance(base, KkepikProvider):
+                try:
+                    await source.teachers()
+                except ProviderError:
+                    logger.warning("Teacher catalog unavailable at startup")
             yield
             if isinstance(base, KkepikProvider):
                 await base.close()

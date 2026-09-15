@@ -31,6 +31,7 @@ class College(DataModel):
     timezone: str
     bells: dict[Literal["weekday", "saturday"], dict[str, Bell]] = Field(default_factory=dict)
     group_aliases: dict[str, list[Text]] = Field(default_factory=dict)
+    teacher_aliases: dict[str, list[Text]] = Field(default_factory=dict)
     excluded_groups: list[Text] = Field(default_factory=list)
     subject_aliases: dict[str, Text] = Field(default_factory=dict)
     group_courses: dict[str, Annotated[int, Field(ge=1, le=4, strict=True)]] = Field(
@@ -74,6 +75,34 @@ class Lesson(DataModel):
         if self.start and self.end and self.start >= self.end:
             raise ValueError("Lesson must end after it starts")
         return self
+
+
+class Teacher(DataModel):
+    """The source's exact name is the ID; aliases only affect recognition."""
+
+    id: Text
+    name: Text
+    aliases: list[Text] = Field(default_factory=list)
+
+
+class TeacherLesson(DataModel):
+    number: int = Field(ge=1, le=12, strict=True)
+    groups: list[Text] = Field(min_length=1, max_length=16)
+    subject: str = Field(default="", max_length=200)
+    subgroup: str = Field(default="", max_length=80)
+    start: ClockTime | None = None
+    end: ClockTime | None = None
+
+
+class TeacherScheduleResult(DataModel):
+    teacher_id: Text
+    date: date
+    lessons: list[TeacherLesson] = Field(max_length=192)
+    source: Literal["kkepik", "file", "override"]
+    fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    stale: bool = False
+    demo: bool = False
+    partial: bool = False
 
 
 class ScheduleDay(DataModel):

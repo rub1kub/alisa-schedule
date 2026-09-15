@@ -36,6 +36,18 @@ TEMPLATE_FIELDS = {
     "date_invalid": {},
     "date_out_of_range": {},
     "not_published": {},
+    "teacher_not_published": {},
+    "ask_teacher": {},
+    "unknown_teacher": {},
+    "ambiguous_teacher": {},
+    "multiple_teachers": {},
+    "one_target": {},
+    "teacher_header": {"teacher": 200},
+    "teacher_partial": {},
+    "teacher_partial_empty": {},
+    "teacher_lesson": {"number": 2, "label": 0},
+    "prefer_exit": {},
+    "prefer_stay": {},
     "groups": {"groups": 0},
     "page_changed": {},
     "page_more": {},
@@ -62,6 +74,7 @@ TEMPLATE_FIELDS = {
 class ResponseOptions(DataModel):
     auto_exit: StrictBool = True
     show_group: StrictBool = False
+    teacher_lesson_label: Literal["group", "both"] = "group"
     lesson_label: LessonLabel = "auto"
     course_labels: dict[Literal["1", "2", "3", "4"], Literal["subject", "teacher", "both"]]
     schedule_time: Literal["none", "start", "range"] = "none"

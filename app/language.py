@@ -255,6 +255,8 @@ def detect_intent(command: str, nlu: NLU) -> str | None:
     if text in {"хватит", "стоп", "выход", "закрой навык", "до свидания"}:
         return "exit"
     preferences = {
+        "prefer_exit": {"выходи после ответа", "завершай после ответа", "включи автовыход"},
+        "prefer_stay": {"не выходи после ответа", "оставайся в навыке", "выключи автовыход"},
         "prefer_subject": {"называй предметы", "только предметы", "предметы", "по предметам"},
         "prefer_teacher": {
             "называй преподавателей",
@@ -273,7 +275,9 @@ def detect_intent(command: str, nlu: NLU) -> str | None:
             return intent
     if re.search(r"\b(?:забудь|сбрось|удали)\b.*\bгрупп\w*", text):
         return "forget"
-    if re.search(r"\b(?:сменить|смена|смени|поменяй|выбрать|изменить|другая)\b.*\bгрупп\w*", text):
+    if re.search(
+        r"\b(?:сменить|смена|смени|поменяй|выбрать|изменить|другая|запомни)\b.*\bгрупп\w*", text
+    ):
         return "change"
     if text in {"моя группа", "какая у меня группа"}:
         return "my_group"
