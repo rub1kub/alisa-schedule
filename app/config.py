@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Settings(BaseModel):
@@ -11,6 +11,7 @@ class Settings(BaseModel):
 
     environment: Literal["development", "production"] = "development"
     skill_id: str = ""
+    test_skill_id: str = ""
     provider: Literal["kkepik", "file"] = "kkepik"
     api_base_url: str = "https://kkepik.rub1kub.ru"
     college_file: Path = Path("data/college.json")
@@ -22,6 +23,11 @@ class Settings(BaseModel):
     upstream_timeout: float = Field(default=1.8, gt=0, le=2)
     upstream_rps: float = Field(default=4, gt=0, le=4)
     max_body_bytes: int = Field(default=65536, ge=1024, le=262144)
+
+    @field_validator("skill_id", "test_skill_id")
+    @classmethod
+    def strip_skill_id(cls, value: str) -> str:
+        return value.strip()
 
     @model_validator(mode="after")
     def validate_deployment(self):
@@ -45,6 +51,7 @@ class Settings(BaseModel):
         mapping = {
             "environment": "APP_ENV",
             "skill_id": "ALICE_SKILL_ID",
+            "test_skill_id": "ALICE_TEST_SKILL_ID",
             "provider": "SCHEDULE_PROVIDER",
             "api_base_url": "API_BASE_URL",
             "college_file": "COLLEGE_FILE",

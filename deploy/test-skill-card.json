@@ -1,0 +1,14 @@
+{
+  "skill_id": "ee838f6d-dab9-4ae3-b657-caf3d15a8052",
+  "name": "ККЭПик тест",
+  "console_url": "https://dialogs.yandex.ru/developer/skills/ee838f6d-dab9-4ae3-b657-caf3d15a8052/draft/settings/main",
+  "webhook_url": "https://kkepik.rub1kub.ru/alice/webhook",
+  "activation_example": "Алиса, запусти навык ККЭПик тест",
+  "description": "Тестовая версия ККЭПика для проверки на Станции. Расписание ККЭП: сегодня, завтра, первая пара и количество пар. Назовите группу один раз. На первом курсе — предметы, на старших — фамилии преподавателей.",
+  "category": "Образование",
+  "developer": "rub1kub",
+  "public": false,
+  "storage_enabled": true,
+  "screen_required": false,
+  "icon": "assets/skill-icon.png"
+}

@@ -19,6 +19,7 @@ logger = logging.getLogger("alisa_schedule")
 
 def create_app(settings: Settings | None = None, provider=None, now=None) -> FastAPI:
     settings = settings or Settings.from_env()
+    allowed_skill_ids = {value for value in (settings.skill_id, settings.test_skill_id) if value}
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -90,7 +91,7 @@ def create_app(settings: Settings | None = None, provider=None, now=None) -> Fas
             return JSONResponse({"error": "request timeout"}, status_code=408)
         except (ValueError, ValidationError):
             return JSONResponse({"error": "invalid Alice request"}, status_code=400)
-        if settings.skill_id and envelope.session.skill_id != settings.skill_id:
+        if allowed_skill_ids and envelope.session.skill_id not in allowed_skill_ids:
             return JSONResponse({"error": "unknown skill"}, status_code=403)
         try:
             async with asyncio.timeout(2.8):
