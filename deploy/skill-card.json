@@ -1,0 +1,20 @@
+{
+  "skill_id": "e1db3ff8-41a7-4a69-bf69-1bb1de58d666",
+  "status": "moderation",
+  "name": "ККЭПик",
+  "console_url": "https://dialogs.yandex.ru/developer/skills/e1db3ff8-41a7-4a69-bf69-1bb1de58d666/draft/settings/main",
+  "webhook_url": "https://kkepik.rub1kub.ru/alice/webhook",
+  "activation_example": "Алиса, спроси у ККЭПика, что завтра",
+  "description": "Расписание ККЭП по данным ККЭПика.\n\nСпросите, что завтра, какая первая пара или сколько пар. На первом курсе — предметы, на старших — фамилии преподавателей без инициалов.\n\nНазовите группу один раз. Можно переключиться: «называй предметы» или «называй преподавателей». Выбор сохраняется. Даты и время — московские.",
+  "category": "Образование",
+  "developer": "rub1kub",
+  "public": true,
+  "storage_enabled": true,
+  "screen_required": false,
+  "icon": "assets/skill-icon.png",
+  "activation_names": [
+    "Расписание Ккэпик",
+    "ККЭПика"
+  ],
+  "brand_website": "https://rub1kub.ru"
+}

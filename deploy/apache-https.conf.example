@@ -1,0 +1,27 @@
+# Enable only after DNS and a valid certificate for ALICE_DOMAIN exist.
+<VirtualHost *:443>
+    ServerName ALICE_DOMAIN
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/ALICE_DOMAIN/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/ALICE_DOMAIN/privkey.pem
+
+    ProxyRequests Off
+    ProxyPreserveHost On
+    ProxyTimeout 4
+    LimitRequestBody 65536
+
+    ProxyPassMatch "^/webhook$" "http://127.0.0.1:18791/webhook" connectiontimeout=1 timeout=4
+    ProxyPassReverse /webhook http://127.0.0.1:18791/webhook
+
+    <Location /webhook>
+        <LimitExcept POST>
+            Require all denied
+        </LimitExcept>
+    </Location>
+
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Cache-Control "no-store"
+    LogFormat "%t %>s %D" alisa_schedule_no_pii
+    CustomLog /var/log/apache2/alisa-schedule-access.log alisa_schedule_no_pii
+    ErrorLog /var/log/apache2/alisa-schedule-error.log
+</VirtualHost>

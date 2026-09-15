@@ -1,0 +1,10 @@
+# New standalone virtual host for the skill's domain. Replace ALICE_DOMAIN.
+<VirtualHost *:80>
+    ServerName ALICE_DOMAIN
+    DocumentRoot /var/www/alisa-schedule
+    <Directory /var/www/alisa-schedule>
+        Options -Indexes
+        AllowOverride None
+        Require all granted
+    </Directory>
+</VirtualHost>
