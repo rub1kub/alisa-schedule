@@ -60,6 +60,7 @@ TEMPLATE_FIELDS = {
 
 
 class ResponseOptions(DataModel):
+    auto_exit: StrictBool = True
     show_group: StrictBool = False
     lesson_label: LessonLabel = "auto"
     course_labels: dict[Literal["1", "2", "3", "4"], Literal["subject", "teacher", "both"]]

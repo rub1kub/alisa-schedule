@@ -82,9 +82,9 @@ def test_explicit_question_overrides_mode_without_changing_preference(named_clie
     subjects = ask(named_client, "какие предметы завтра", state)
     assert "Математика" in subjects["response"]["text"]
     assert "application_state" not in subjects
-    first = ask(named_client, "кто ведёт первую пару", {"session": subjects["session_state"]})
+    first = ask(named_client, "кто ведёт первую пару", state, new=True)
     assert first["response"]["text"] == "2-я пара — Тестова, в 10:25."
-    teachers = ask(named_client, "что завтра", {"session": subjects["session_state"]})
+    teachers = ask(named_client, "что завтра", state, new=True)
     assert "Тестова" in teachers["response"]["text"]
 
 

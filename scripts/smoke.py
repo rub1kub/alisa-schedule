@@ -16,16 +16,19 @@ def main():
     args = parser.parse_args()
     responses = Responses.load(Settings.from_env().responses_file)
     state = {"session": {}, "application": {}}
+    new_session = True
+    session_number = 0
+    message_id = 0
     for index, command in enumerate(
-        ("группа сто три", "что завтра", "какая первая пара", "сколько пар")
+        ("группа сто три", "что завтра", "какая первая пара завтра", "сколько пар завтра")
     ):
         body = {
             "version": "1.0",
             "session": {
-                "session_id": "local-test",
-                "message_id": index,
+                "session_id": f"local-test-{session_number}",
+                "message_id": message_id,
                 "skill_id": args.skill_id,
-                "new": index == 0,
+                "new": new_session,
                 "application": {"application_id": "local-test"},
             },
             "request": {"type": "SimpleUtterance", "command": command},
@@ -40,11 +43,18 @@ def main():
             data = json.load(response)
         assert data["version"] == "1.0" and 0 < len(data["response"]["text"]) <= 1024
         assert responses.text("failure") not in data["response"]["text"]
-        state["session"] = data.get("session_state", {})
+        ended = data["response"]["end_session"]
+        state["session"] = {} if ended else data.get("session_state", {})
         state["application"] = data.get("application_state", state["application"])
         if index == 0:
             assert state["application"].get("group_id") == "103-Д9-3ИНС"
-        print(f"Dialog step {index + 1}: OK")
+            assert not ended
+        elif not data.get("session_state", {}).get("cursor"):
+            assert ended is responses.options.auto_exit
+        new_session = ended
+        message_id = 0 if ended else message_id + 1
+        session_number += int(ended)
+        print(f"Dialog step {index + 1}: OK, end_session={ended}")
 
 
 if __name__ == "__main__":

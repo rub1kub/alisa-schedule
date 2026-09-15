@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "options": {
+    "auto_exit": true,
     "show_group": false,
     "schedule_time": "none",
     "first_time": "start",

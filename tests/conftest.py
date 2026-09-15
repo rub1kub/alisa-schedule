@@ -46,6 +46,12 @@ def client(tmp_path):
 
 
 @pytest.fixture
+def dialog_client(client):
+    client.app.state.skill.responses.options.auto_exit = False
+    return client
+
+
+@pytest.fixture
 def fixture_data():
     return json.loads(Path("data/schedule.example.json").read_text())
 

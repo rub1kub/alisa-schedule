@@ -190,7 +190,12 @@ class Skill:
         return answer(request, memory, text, **kwargs)
 
     def failure(self, request: AliceRequest):
-        return self.reply(request, memory_from(request), self.text("failure"))
+        return self.reply(
+            request,
+            memory_from(request),
+            self.text("failure"),
+            end=self.responses.options.auto_exit,
+        )
 
     def ask_group(self, request, memory, groups, prompt="ask_group", persist=False):
         examples = groups[:3]
@@ -371,4 +376,11 @@ class Skill:
                 button(self.text("button_more"), action="more"),
                 button(self.text("button_change"), action="change"),
             ]
-        return self.reply(request, memory, text, persist=persist, buttons=buttons)
+        return self.reply(
+            request,
+            memory,
+            text,
+            persist=persist,
+            buttons=buttons,
+            end=self.responses.options.auto_exit and not memory.cursor,
+        )

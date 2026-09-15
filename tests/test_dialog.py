@@ -24,10 +24,12 @@ def chosen_state():
 def test_first_request_keeps_tomorrow_while_asking_for_group(client):
     initial = post(client, "что завтра", new=True)
     assert "Какая группа?" in initial["response"]["text"]
+    assert initial["response"]["end_session"] is False
     result = post(client, "группа сто три", state={"session": initial["session_state"]})
     assert result["session_state"]["last_date"] == "2026-09-16"
     assert "Компьютерные сети" in result["response"]["text"]
     assert result["application_state"] == {"group_id": GROUP}
+    assert result["response"]["end_session"] is True
 
 
 def test_group_survives_new_session_and_unknown_commands(client):
@@ -36,7 +38,7 @@ def test_group_survives_new_session_and_unknown_commands(client):
         client, "что сегодня", new=True, state={"application": selected["application_state"]}
     )
     assert "Математика" in result["response"]["text"]
-    unknown = post(client, "погода", state={"session": result["session_state"]})
+    unknown = post(client, "погода", new=True, state={"application": selected["application_state"]})
     assert unknown["session_state"]["group_id"] == GROUP
 
 
@@ -78,20 +80,22 @@ def test_new_account_does_not_inherit_guest_choice(client):
 def test_required_utterances(client, command, fragment):
     result = post(client, command, state=chosen_state())
     assert fragment in result["response"]["text"]
+    assert result["response"]["end_session"] is True
+    assert "buttons" not in result["response"]
 
 
-def test_followup_first_and_count_reuse_selected_day(client):
-    tomorrow = post(client, "что завтра", state=chosen_state())
-    first = post(client, "какая первая пара", state={"session": tomorrow["session_state"]})
+def test_followup_first_and_count_reuse_selected_day(dialog_client):
+    tomorrow = post(dialog_client, "что завтра", state=chosen_state())
+    first = post(dialog_client, "какая первая пара", state={"session": tomorrow["session_state"]})
     assert first["session_state"]["last_date"] == "2026-09-16"
     assert "Компьютерные сети" in first["response"]["text"]
 
 
-def test_yandex_normalized_first_pair_preserves_context(client):
-    tomorrow = post(client, "что завтра", state=chosen_state())
+def test_yandex_normalized_first_pair_preserves_context(dialog_client):
+    tomorrow = post(dialog_client, "что завтра", state=chosen_state())
     request = envelope("какая 1 пара", state={"session": tomorrow["session_state"]})
     request["request"]["original_utterance"] = "какая первая пара"
-    response = client.post("/webhook", json=request).json()
+    response = dialog_client.post("/webhook", json=request).json()
     assert response["session_state"]["last_date"] == "2026-09-16"
     assert "1-я пара" in response["response"]["text"]
     assert "Программирование" not in response["response"]["text"]
