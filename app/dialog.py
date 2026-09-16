@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app.language import (
     date_label,
     detect_intent,
+    group_fragment,
     group_matches,
     normalize,
     number_words,
@@ -24,7 +25,8 @@ from app.providers import NotPublished, ProviderError, ScheduleProvider, plain
 from app.responses import LessonLabel, Responses, lesson_label
 from app.teachers import surname, teacher_matches, teacher_query
 
-Kind = Literal["schedule", "first", "count", "lesson"]
+Kind = Literal["schedule", "first", "last", "count", "lesson", "start", "finish"]
+KINDS = {"schedule", "first", "last", "count", "lesson", "start", "finish"}
 
 
 class Memory(BaseModel):
@@ -136,6 +138,23 @@ def page(text: str, memory: Memory, more: bool, responses: Responses) -> str:
     return prefix + text[start:end] + suffix
 
 
+def timing_text(lessons, kind: str, responses: Responses) -> str:
+    field = "start" if kind == "start" else "end"
+    number = (
+        min(item.number for item in lessons)
+        if kind == "start"
+        else max(item.number for item in lessons)
+    )
+    edge = [item for item in lessons if item.number == number]
+    times = [getattr(item, field) for item in edge]
+    if not all(times):
+        return responses.text("time_missing")
+    value = min(times) if kind == "start" else max(times)
+    return responses.text(
+        "day_start" if kind == "start" else "day_finish", time=value, number=number
+    )
+
+
 def schedule_text(
     result: ScheduleResult,
     group: Group,
@@ -160,20 +179,24 @@ def schedule_text(
             text("date_header", date=date_label(result.date, full=options.date_format == "full"))
         )
     lessons = sorted(result.lessons, key=lambda item: (item.number, item.subgroup))
-    if kind == "lesson":
+    if kind == "lesson" or (kind in {"start", "finish"} and pair_number is not None):
         lessons = [lesson for lesson in lessons if lesson.number == pair_number]
         if not lessons:
             return " ".join([*lines, text("pair_empty", number=pair_number)])
     if not lessons:
         return " ".join([*lines, text("day_empty")])
+    if kind in {"start", "finish"}:
+        return " ".join([*lines, timing_text(lessons, kind, responses)])
     count = len({lesson.number for lesson in lessons})
     if kind == "count":
         return " ".join([*lines, text("day_count", count=pair_count(count))])
     if kind == "first":
         lessons = [lesson for lesson in lessons if lesson.number == lessons[0].number]
+    elif kind == "last":
+        lessons = [lesson for lesson in lessons if lesson.number == lessons[-1].number]
     elif kind == "schedule":
         lines.append(text("day_count", count=pair_count(count)))
-    time_mode = options.first_time if kind == "first" else options.schedule_time
+    time_mode = options.first_time if kind in {"first", "last"} else options.schedule_time
     for lesson in lessons:
         parts = [
             text(
@@ -216,20 +239,24 @@ def teacher_schedule_text(
             text("date_header", date=date_label(result.date, full=options.date_format == "full"))
         )
     lessons = sorted(result.lessons, key=lambda item: (item.number, item.groups, item.subgroup))
-    if kind == "lesson":
+    if kind == "lesson" or (kind in {"start", "finish"} and pair_number is not None):
         lessons = [lesson for lesson in lessons if lesson.number == pair_number]
         if not lessons:
             key = "pair_partial_empty" if result.partial else "pair_empty"
             return " ".join([*lines, text(key, number=pair_number)])
     if not lessons:
         return " ".join([*lines, text("teacher_partial_empty" if result.partial else "day_empty")])
+    if kind in {"start", "finish"}:
+        return " ".join([*lines, timing_text(lessons, kind, responses)])
     if kind in {"schedule", "count"}:
         lines.append(text("day_count", count=pair_count(len({item.number for item in lessons}))))
     if kind == "count":
         return " ".join(lines)
     if kind == "first":
         lessons = [item for item in lessons if item.number == lessons[0].number]
-    time_mode = options.first_time if kind == "first" else options.schedule_time
+    elif kind == "last":
+        lessons = [item for item in lessons if item.number == lessons[-1].number]
+    time_mode = options.first_time if kind in {"first", "last"} else options.schedule_time
     # One period with several groups counts once, but every group remains audible.
     for lesson in lessons:
         label = ", ".join(plain(group) for group in lesson.groups)
@@ -311,7 +338,7 @@ class Skill:
         )
 
     async def handle_teacher(self, request, memory, command, intent, selection, pair):
-        kind = intent if intent in {"schedule", "first", "count", "lesson"} else None
+        kind = intent if intent in KINDS else None
         query_label = requested_label(command)
         more = intent == "more" and memory.view == "teacher"
         selected_id = request.request.payload.get("teacher_id")
@@ -328,6 +355,14 @@ class Skill:
         fragment = teacher_query(command)
         lookup = fragment is not None or memory.awaiting_teacher or selected_id is not None
         if lookup:
+            name_fragment = re.sub(r"\b[а-яa-z] [а-яa-z]\b", "", fragment or "")
+            if re.search(r"\b(?:и|или)\s+[а-яa-z]{2,}\b", name_fragment) and not selection.error:
+                # Do not silently drop a second, unrecognised surname.
+                memory.awaiting_teacher = True
+                memory.pending_kind = kind or "schedule"
+                memory.pending_date = selection.value or memory.last_date
+                memory.pending_label = query_label
+                return self.reply(request, memory, self.text("multiple_teachers"), buttons=[])
             matches = teacher_matches(command, teachers)
             if selected_id is not None:
                 matches = [item for item in teachers if item.id == selected_id]
@@ -338,7 +373,12 @@ class Skill:
                 memory.query_group_id = None
                 memory.pending_kind = kind or memory.pending_kind or "schedule"
                 memory.pending_label = query_label or memory.pending_label
-                memory.pending_date = selection.value or memory.pending_date
+                memory.pending_date = (
+                    selection.value
+                    or memory.pending_date
+                    or (memory.last_date if normalize(command).startswith("а ") else None)
+                )
+                memory.awaiting_date = memory.awaiting_date or bool(selection.error)
                 memory.cursor = 0
                 memory.view = "teacher"
                 prompt = "ambiguous_teacher" if matches else "unknown_teacher"
@@ -364,7 +404,7 @@ class Skill:
             and query_label
             and not lookup
             and not selection.value
-            and memory.last_kind in {"first", "lesson"}
+            and memory.last_kind in {"first", "last", "lesson"}
             and "расписание" not in normalize(command)
         )
         if clarify_pair:
@@ -382,7 +422,7 @@ class Skill:
             return self.reply(request, memory, self.text(selection.error or "date_required"))
         target = selection.value or memory.pending_date
         if target is None and (
-            more or (not lookup and (kind in {"first", "count", "lesson"} or query_label))
+            more or (not lookup and kind in KINDS) or normalize(command).startswith("а ")
         ):
             target = memory.last_date
         target = target or self.now()
@@ -391,7 +431,7 @@ class Skill:
         memory.pending_date = None
         if not more:
             memory.last_label = query_label or memory.pending_label
-        memory.last_pair = pair_number if kind == "lesson" else None
+        memory.last_pair = pair_number if kind in {"lesson", "start", "finish"} else None
         memory.awaiting_pair = False
         memory.pending_pair = None
         memory.pending_label = None
@@ -464,9 +504,13 @@ class Skill:
                 request, memory, text, end=bool(memory.group_id) and self.auto_exit(memory)
             )
 
-        pair = parse_pair(command, allow_bare=memory.awaiting_pair)
+        pair = parse_pair(
+            command,
+            allow_bare=memory.awaiting_pair
+            and not (memory.awaiting_group or memory.awaiting_teacher),
+        )
         if pair.value is not None or pair.error:
-            intent = "lesson"
+            intent = intent if intent in {"start", "finish"} and not pair.error else "lesson"
             memory.pending_pair = pair.value
             if pair.error:
                 memory.awaiting_pair = True
@@ -474,12 +518,30 @@ class Skill:
         selection = parse_date(command, utterance.nlu, self.now())
         if selection.value and abs((selection.value - self.now()).days) > 366:
             selection = type(selection)(error="date_out_of_range")
+        if selection.error:
+            memory.awaiting_date = True
         normalized = normalize(command)
-        own_group_reference = bool(re.search(r"\b(?:моей|нашей)\s+групп\w*\b", normalized))
+        own_group_reference = bool(
+            re.search(r"\b(?:моей|нашей)\s+групп\w*\b|\bу (?:меня|нас)\b", normalized)
+            or re.fullmatch(r"(?:а )?(?:моя|наша|мое|наше)", normalized)
+        )
         explicit_group = bool(re.search(r"\bгрупп\w*", normalized)) and not own_group_reference
-        numeric_only = pair.value is None and bool(re.fullmatch(r"\d+", number_words(command)))
+        fragment = group_fragment(command)
+        if (pair.value is not None or pair.error) and re.fullmatch(
+            r"\d+(?: (?:я|й|ю|ой|ей))?", number_words(command)
+        ):
+            fragment = ""
+        numeric_only = (
+            intent is None
+            and pair.value is None
+            and bool(re.fullmatch(r"\d+", number_words(command)))
+        )
         numeric_owner = bool(re.search(r"\bу\s+\d+\b", number_words(command)))
-        numeric_schedule = bool(re.search(r"\bрасписание\s+\d+\b", number_words(command)))
+        numeric_schedule = (
+            not own_group_reference
+            and bool(re.search(r"\b\d+\b", fragment))
+            and (intent in KINDS or selection.value is not None)
+        )
         group_target = (
             explicit_group
             or numeric_only
@@ -487,13 +549,23 @@ class Skill:
             or numeric_schedule
             or selected_id is not None
         )
-        if group_target and teacher_query(command) is not None:
+        if (group_target or own_group_reference) and teacher_query(command) is not None:
+            memory.awaiting_group = True
+            memory.awaiting_teacher = True
+            memory.temporary_group = True
+            memory.query_group_id = None
+            memory.query_teacher_id = None
+            memory.pending_kind = intent if intent in KINDS else "schedule"
+            memory.pending_date = selection.value or memory.last_date
+            memory.pending_label = requested_label(command)
+            memory.awaiting_date = bool(selection.error)
+            memory.view = None
             return self.reply(request, memory, self.text("one_target"), buttons=[])
+        if own_group_reference:
+            memory.awaiting_group = False
+            memory.awaiting_teacher = False
         teacher_followup = memory.view == "teacher" and (
-            intent in {"more", "first", "count", "lesson"}
-            or (selection.value and intent in {None, "schedule"})
-            or (intent == "schedule" and requested_label(command))
-            or memory.awaiting_date
+            intent in KINDS | {"more"} or selection.value or memory.awaiting_date
         )
         if (
             intent not in {"groups", "change"}
@@ -524,13 +596,21 @@ class Skill:
                 request, memory, result, buttons=[button(self.text("button_more"), action="more")]
             )
 
-        matches = group_matches(command, groups, memory.awaiting_group or group_target)
+        matches = group_matches(fragment, groups, memory.awaiting_group or group_target)
         if selected_id is not None:
             matches = [group_map[selected_id]] if selected_id in group_map else []
-        kind = intent if intent in {"schedule", "first", "count", "lesson"} else None
+        kind = intent if intent in KINDS else None
         query_label = requested_label(command)
         if selection.value and kind is None:
             kind = memory.pending_kind or "schedule"
+        if numeric_owner or own_group_reference:
+            kind = kind or "schedule"
+        if group_target and re.search(r"\b\d+ (?:и|или) \d+\b", fragment) and not pair.error:
+            memory.pending_kind = kind or "schedule"
+            memory.pending_date = selection.value or memory.last_date
+            memory.pending_label = query_label
+            memory.temporary_group = True
+            return self.ask_group(request, memory, groups, "one_target")
         save_requested = intent == "change" or bool(
             re.search(r"\b(?:моя группа|учусь в группе)\b", normalized)
         )
@@ -544,7 +624,7 @@ class Skill:
             memory.pending_label = None
             memory.pending_pair = None
             memory.awaiting_pair = False
-        elif not memory.awaiting_group and (group_target or matches) and kind:
+        elif not memory.awaiting_group and (group_target or matches) and (kind or numeric_owner):
             memory.temporary_group = True
         if len(matches) > 1:
             memory.pending_kind = kind or memory.pending_kind
@@ -552,6 +632,7 @@ class Skill:
             memory.pending_date = selection.value or memory.pending_date
             return self.ask_group(request, memory, matches, "ambiguous_group")
         persist = False
+        previous_view = memory.view
         if matches:
             memory.query_group_id = matches[0].id
             if not memory.temporary_group:
@@ -594,10 +675,10 @@ class Skill:
             more
             or memory.awaiting_date
             or memory.awaiting_pair
-            or (memory.view == "schedule" and (kind in {"first", "count", "lesson"} or query_label))
+            or (previous_view in {"schedule", "teacher"} and kind in KINDS)
         )
         query_group_id = (
-            memory.query_group_id
+            (memory.query_group_id or memory.group_id)
             if matches or (continuing and not own_group_reference)
             else memory.group_id
         )
@@ -616,7 +697,7 @@ class Skill:
             and not group_target
             and not selection.value
             and memory.view == "schedule"
-            and memory.last_kind in {"first", "lesson"}
+            and memory.last_kind in {"first", "last", "lesson"}
             and "расписание" not in normalized
         )
         if clarify_pair:
@@ -651,7 +732,7 @@ class Skill:
         memory.awaiting_date = False
         memory.awaiting_pair = False
         memory.pending_pair = None
-        memory.last_pair = pair_number if kind == "lesson" else None
+        memory.last_pair = pair_number if kind in {"lesson", "start", "finish"} else None
         memory.awaiting_teacher = False
         memory.query_teacher_id = None
         memory.query_group_id = query_group_id

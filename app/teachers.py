@@ -68,9 +68,19 @@ def teacher_matches(command: str, teachers: list[Teacher]) -> list[Teacher]:
 def teacher_query(command: str) -> str | None:
     """Return a name fragment only for a teacher lookup, not 'кто ведёт пару'."""
     text = normalize(command)
+    if re.fullmatch(r"(?:а )?(?:какой )?(?:преподаватель|препод|кто)", text):
+        return None
     marker = re.search(r"\b(?:преподавателя|преподавателю|преподаватель|препода)\b(.*)", text)
     if marker:
-        return marker[1].strip()
+        fragment = marker[1].strip()
+        # 'Преподаватель второй пары' describes a lesson; a surname after
+        # 'преподавателя' is still an explicit timetable target.
+        if re.match(
+            r"(?:(?:на\s+)?\d+(?:\s+(?:я|й|ю|ой|ей))?\s+пар\w*|ведет|ведут)\b",
+            number_words(fragment),
+        ):
+            return None
+        return fragment
     if re.search(r"\bгрупп\w*", text):
         return None
     owner = re.search(r"\bу\s+(?!меня\b|нас\b|тебя\b|вас\b)(.+)", text)
@@ -81,7 +91,25 @@ def teacher_query(command: str) -> str | None:
         return None
     direct = re.search(r"\bрасписание\s+(.+)", text)
     if direct:
-        stop = {"на", "сегодня", "завтра", "послезавтра", "вчера", "мое", "моё", "мне"}
+        stop = {
+            "на",
+            "сегодня",
+            "завтра",
+            "послезавтра",
+            "вчера",
+            "мое",
+            "моё",
+            "мне",
+            "пожалуйста",
+            "через",
+            "с",
+            "со",
+            "в",
+            "за",
+            "без",
+            "по",
+            "не",
+        }
         stop.update(MONTHS)
         stop.update(form for forms in WEEKDAYS for form in forms)
         first = direct[1].split()[0]

@@ -7,13 +7,13 @@ from app.models import Group
 from app.protocol import NLU
 
 WEEKDAYS = (
-    ("понедельник", "понедельника"),
-    ("вторник", "вторника"),
-    ("среда", "среду", "среды"),
-    ("четверг", "четверга"),
-    ("пятница", "пятницу", "пятницы"),
-    ("суббота", "субботу", "субботы"),
-    ("воскресенье", "воскресенья"),
+    ("понедельник", "понедельника", "пн"),
+    ("вторник", "вторника", "вт"),
+    ("среда", "среду", "среды", "ср"),
+    ("четверг", "четверга", "чт"),
+    ("пятница", "пятницу", "пятницы", "пт"),
+    ("суббота", "субботу", "субботы", "сб"),
+    ("воскресенье", "воскресенья", "вс"),
 )
 MONTHS = (
     "января",
@@ -143,6 +143,32 @@ def group_matches(command: str, groups: list[Group], allow_short: bool) -> list[
     ]
 
 
+def group_fragment(command: str) -> str:
+    """Keep potential group numbers, excluding dates and numbered lessons.
+
+    Short group IDs can overlap day and lesson numbers. Those numbers must never
+    select a group, even while answering an onboarding question.
+    """
+    text = re.sub(r"\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[./]\d{1,2}(?:[./]\d{4})?\b", " ", command)
+    if re.match(r"^(?:(?:а|какая|когда|что)\s+)*(?:первая|первую|первое)\b", normalize(text)):
+        text = re.sub(r"\b(?:первая|первую|первое)\b", " ", text, flags=re.IGNORECASE)
+    text = number_words(text)
+    months = "|".join(MONTHS)
+    text = re.sub(rf"\b\d+(?: (?:и|или|по) \d+)? (?:{months})(?: \d{{4}})?\b", " ", text)
+    text = re.sub(r"\bчерез \d+ (?:день|дня|дней)\b", " ", text)
+    text = re.sub(
+        r"\b(?:на\s+)?\d+(?:\s+(?:я|й|ю|ой|ей))?"
+        r"(?:\s+(?:и|или)\s+\d+(?:\s+(?:я|й|ю|ой|ей))?)?"
+        r"\s+(?:пар\w*|занятие|занятии)\b",
+        " ",
+        text,
+    )
+    # An unqualified 'на 25' is a date/lesson clarification, not group 25.
+    if not re.search(r"\bгрупп\w*", text):
+        text = re.sub(r"\bна\s+\d+(?!\d)(?!\s+[а-яa-z]\s*\d)", " ", text)
+    return " ".join(text.split())
+
+
 @dataclass(frozen=True)
 class PairSelection:
     value: int | None = None
@@ -152,11 +178,19 @@ class PairSelection:
 
 def parse_pair(command: str, *, allow_bare: bool = False) -> PairSelection:
     text = number_words(command)
+    if (
+        "сколько" in text.split()
+        and "во сколько" not in text
+        and not re.search(r"\bна \d+.*\bпар\w*", text)
+    ):
+        return PairSelection(remainder=text)
+    if re.search(r"\b(?:первые|последние)\s+\d+\s+пар\w*", text):
+        return PairSelection(error="pair_multiple", remainder="")
     pattern = (
         r"\b(?:на\s+)?(\d+)(?:\s+(?:я|й|ю|ой|ей))?\s+(?:пара|пару|паре|пары|занятие|занятии)\b"
     )
     matches = list(re.finditer(pattern, text))
-    multiple = r"\b(?:на\s+)?\d+\s+и\s+\d+(?:\s+(?:я|й|ю))?\s+пар\w*"
+    multiple = r"\b(?:на\s+)?\d+\s+(?:и|или)\s+\d+(?:\s+(?:я|й|ю))?\s+пар\w*"
     if re.search(multiple, text) or len(matches) > 1:
         remainder = re.sub(pattern, "", re.sub(multiple, "", text))
         return PairSelection(error="pair_multiple", remainder=remainder)
@@ -164,7 +198,7 @@ def parse_pair(command: str, *, allow_bare: bool = False) -> PairSelection:
     if match is None:
         # A short clarification, e.g. "а на второй", is not a calendar date.
         match = re.fullmatch(
-            r"(?:а\s+)?(?:(?:что|кто|какой предмет)\s+)?"
+            r"(?:(?:а|нет)\s+)?(?:(?:что|кто|какой предмет)\s+)?"
             r"(?:(?:сегодня|завтра|послезавтра|вчера)\s+)?"
             r"на\s+(\d+)(?:\s+(?:я|й|ю|ой|ей))?"
             r"(?:\s+(?:сегодня|завтра|послезавтра|вчера))?",
@@ -174,6 +208,13 @@ def parse_pair(command: str, *, allow_bare: bool = False) -> PairSelection:
         match = re.fullmatch(r"(\d+)(?:\s+(?:я|й|ю|ой|ей))?", text)
     if match is None:
         return PairSelection(remainder=text)
+    # Cardinal counts such as 'две пары' and '2 пары' are not a lesson number.
+    if matches and not match[0].startswith("на ") and match[0].endswith(" пары"):
+        ordinal = any(
+            re.search(r"\b" + stem + r"\w*\s+пары\b", normalize(command)) for stem, _ in ORDINALS
+        )
+        if not ordinal:
+            return PairSelection(remainder=text)
     number = int(match[1])
     # "Первая пара" means the first occupied period; "на первой паре" means slot 1.
     if number == 1 and matches and not match[0].startswith("на "):
@@ -218,22 +259,32 @@ def parse_date(command: str, nlu: NLU, today: date) -> DateSelection:
                 days.add(monday + timedelta(days=weekday))
             else:
                 days.add(today + timedelta(days=(weekday - today.weekday()) % 7))
-        if len(days) > 1:
-            return DateSelection(error="date_multiple")
-        if days:
-            return DateSelection(value=days.pop())
-
-        iso = re.search(r"\b(\d{4})-(\d{2})-(\d{2})\b", command)
-        if iso:
-            return DateSelection(value=date(int(iso[1]), int(iso[2]), int(iso[3])))
-        numeric = re.search(r"\b(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\b", command)
-        if numeric:
+        for iso in re.finditer(r"\b(\d{4})-(\d{2})-(\d{2})\b", command):
+            days.add(date(int(iso[1]), int(iso[2]), int(iso[3])))
+        for numeric in re.finditer(r"\b(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\b", command):
             day, month = int(numeric[1]), int(numeric[2])
             year = int(numeric[3]) if numeric[3] else today.year
             value = _calendar_date(day, month, year)
             if not numeric[3] and value < today:
                 value = _calendar_date(day, month, year + 1)
-            return DateSelection(value=value)
+            days.add(value)
+
+        spoken = number_words(command)
+        for index, month_name in enumerate(MONTHS, 1):
+            if re.search(rf"\b\d+ (?:и|или|по) \d+ {month_name}\b", spoken):
+                return DateSelection(error="date_multiple")
+            for match in re.finditer(rf"\b(\d{{1,2}}) {month_name}(?: (\d{{4}}))?\b", spoken):
+                year = int(match[2]) if match[2] else today.year
+                target = date(year, index, int(match[1]))
+                if not match[2] and target < today:
+                    target = date(year + 1, index, int(match[1]))
+                days.add(target)
+        for match in re.finditer(r"\bчерез (\d{1,3}) (?:день|дня|дней)\b", spoken):
+            days.add(today + timedelta(days=int(match[1])))
+        if len(days) > 1:
+            return DateSelection(error="date_multiple")
+        if days:
+            return DateSelection(value=days.pop())
 
         # Yandex resolves spoken dates such as "двадцать пятого сентября".
         entities = [
@@ -269,21 +320,10 @@ def parse_date(command: str, nlu: NLU, today: date) -> DateSelection:
                 return DateSelection(error="date_day_required")
             return DateSelection(value=target)
 
-        spoken = number_words(command)
-        for index, month_name in enumerate(MONTHS, 1):
-            match = re.search(rf"\b(\d{{1,2}}) {month_name}(?: (\d{{4}}))?\b", spoken)
-            if match:
-                year = int(match[2]) if match[2] else today.year
-                target = date(year, index, int(match[1]))
-                if not match[2] and target < today:
-                    target = date(year + 1, index, int(match[1]))
-                return DateSelection(value=target)
-        match = re.search(r"\bчерез (\d{1,3}) (?:день|дня|дней)\b", spoken)
-        if match:
-            return DateSelection(value=today + timedelta(days=int(match[1])))
         if re.search(r"\b(?:недел\w*|месяц\w*|числ\w*)\b", text) or any(m in text for m in MONTHS):
             return DateSelection(error="date_unclear")
-        if " на " in f" {parse_pair(command).remainder} " and not re.search(r"\bгрупп\w*", text):
+        remainder = re.sub(r"\bна последней паре\b", "", parse_pair(command).remainder)
+        if " на " in f" {remainder} " and not re.search(r"\bгрупп\w*", text):
             return DateSelection(error="date_unclear")
         return DateSelection()
     except (ValueError, OverflowError):
@@ -304,12 +344,9 @@ def detect_intent(command: str, nlu: NLU) -> str | None:
             "называй преподавателей",
             "называй фамилии",
             "только преподаватели",
-            "преподаватели",
-            "фамилии преподавателей",
             "по преподавателям",
-            "фамилии",
         },
-        "prefer_both": {"предметы и преподаватели", "называй предметы и преподавателей"},
+        "prefer_both": {"называй предметы и преподавателей"},
         "prefer_auto": {"выбирай по курсу", "автоматический режим", "режим по курсу"},
     }
     for intent, commands in preferences.items():
@@ -327,16 +364,24 @@ def detect_intent(command: str, nlu: NLU) -> str | None:
         return "groups"
     if text in {"дальше", "еще", "продолжай", "продолжить"}:
         return "more"
-    if re.search(r"\bсколько\b.*\b(?:пар|пары|занятий|уроков)\b", text):
+    if re.search(r"\b(?:до скольки|во сколько (?:законч|конец)|когда (?:законч|конец))", text):
+        return "finish"
+    if re.search(r"\b(?:ко скольки|к скольки|во сколько|когда начало|когда начина\w*)\b", text):
+        return "start"
+    if re.search(r"\bсколько\b", text):
         return "count"
+    if re.search(r"\bпоследн(?:яя|юю|ее|ей)\b", text):
+        return "last"
     if (
         re.search(r"\b(?:первая|первую|первое|1(?:\s*я)?)\s+(?:пара|пару|занятие)\b", text)
-        or text in {"первая", "первую", "первое"}
+        or re.match(r"^(?:(?:а|какая|когда|что)\s+)*(?:первая|первую|первое)\b", text)
+        and not re.search(r"\bгрупп\w*", text)
         or "во сколько начало" in text
+        or "с какой пары" in text
     ):
         return "first"
     if re.search(
-        r"\b(?:расписание|пары|пара|занятия|учимся|учеба|что|предмет\w*|препод\w*|фамили\w*)\b",
+        r"\b(?:расписание|пар\w*|занятия|учимся|учеба|что|че|чо|кто|предмет\w*|препод\w*|фамили\w*)\b",
         text,
     ):
         return "schedule"
@@ -347,6 +392,10 @@ def requested_label(command: str) -> str | None:
     text = normalize(command)
     subjects = bool(re.search(r"\bпредмет\w*", text))
     teachers = bool(re.search(r"\b(?:препод\w*|фамили\w*|кто)\b", text))
+    if re.search(r"\b(?:без|не(?: надо)?)\s+(?:препод\w*|фамили\w*)", text):
+        teachers, subjects = False, True
+    if re.search(r"\b(?:без|не(?: надо)?)\s+предмет\w*", text):
+        subjects, teachers = False, True
     if subjects and teachers:
         return "both"
     return "subject" if subjects else "teacher" if teachers else None

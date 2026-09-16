@@ -78,6 +78,9 @@
     "pair_required": "Какой номер пары?",
     "pair_invalid": "Назовите номер пары от 1 до 12.",
     "pair_multiple": "Назовите одну пару.",
-    "subject_missing": "предмет не указан"
+    "subject_missing": "предмет не указан",
+    "time_missing": "Время не указано в расписании.",
+    "day_start": "К {time}, {number}-я пара.",
+    "day_finish": "В {time}, после {number}-й пары."
   }
 }
