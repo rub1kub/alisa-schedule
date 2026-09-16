@@ -71,6 +71,7 @@ NUMBERS = {
     "девятьсот": 900,
 }
 ORDINALS = (
+    ("нулев", 0),
     ("перв", 1),
     ("втор", 2),
     ("трет", 3),
@@ -140,6 +141,47 @@ def group_matches(command: str, groups: list[Group], allow_short: bool) -> list[
         for group in groups
         if (prefix := re.match(r"^\d+", group.name)) and f" {prefix[0]} " in text
     ]
+
+
+@dataclass(frozen=True)
+class PairSelection:
+    value: int | None = None
+    error: str | None = None
+    remainder: str = ""
+
+
+def parse_pair(command: str, *, allow_bare: bool = False) -> PairSelection:
+    text = number_words(command)
+    pattern = (
+        r"\b(?:на\s+)?(\d+)(?:\s+(?:я|й|ю|ой|ей))?\s+(?:пара|пару|паре|пары|занятие|занятии)\b"
+    )
+    matches = list(re.finditer(pattern, text))
+    multiple = r"\b(?:на\s+)?\d+\s+и\s+\d+(?:\s+(?:я|й|ю))?\s+пар\w*"
+    if re.search(multiple, text) or len(matches) > 1:
+        remainder = re.sub(pattern, "", re.sub(multiple, "", text))
+        return PairSelection(error="pair_multiple", remainder=remainder)
+    match = matches[0] if matches else None
+    if match is None:
+        # A short clarification, e.g. "а на второй", is not a calendar date.
+        match = re.fullmatch(
+            r"(?:а\s+)?(?:(?:что|кто|какой предмет)\s+)?"
+            r"(?:(?:сегодня|завтра|послезавтра|вчера)\s+)?"
+            r"на\s+(\d+)(?:\s+(?:я|й|ю|ой|ей))?"
+            r"(?:\s+(?:сегодня|завтра|послезавтра|вчера))?",
+            text,
+        )
+    if match is None and allow_bare:
+        match = re.fullmatch(r"(\d+)(?:\s+(?:я|й|ю|ой|ей))?", text)
+    if match is None:
+        return PairSelection(remainder=text)
+    number = int(match[1])
+    # "Первая пара" means the first occupied period; "на первой паре" means slot 1.
+    if number == 1 and matches and not match[0].startswith("на "):
+        return PairSelection(remainder=text)
+    remainder = text[: match.start()] + " " + text[match.end() :]
+    if not 1 <= number <= 12:
+        return PairSelection(error="pair_invalid", remainder=remainder)
+    return PairSelection(value=number, remainder=remainder)
 
 
 @dataclass(frozen=True)
@@ -241,7 +283,7 @@ def parse_date(command: str, nlu: NLU, today: date) -> DateSelection:
             return DateSelection(value=today + timedelta(days=int(match[1])))
         if re.search(r"\b(?:недел\w*|месяц\w*|числ\w*)\b", text) or any(m in text for m in MONTHS):
             return DateSelection(error="date_unclear")
-        if " на " in f" {text} " and not re.search(r"\bгрупп\w*", text):
+        if " на " in f" {parse_pair(command).remainder} " and not re.search(r"\bгрупп\w*", text):
             return DateSelection(error="date_unclear")
         return DateSelection()
     except (ValueError, OverflowError):
@@ -257,7 +299,7 @@ def detect_intent(command: str, nlu: NLU) -> str | None:
     preferences = {
         "prefer_exit": {"выходи после ответа", "завершай после ответа", "включи автовыход"},
         "prefer_stay": {"не выходи после ответа", "оставайся в навыке", "выключи автовыход"},
-        "prefer_subject": {"называй предметы", "только предметы", "предметы", "по предметам"},
+        "prefer_subject": {"называй предметы", "только предметы", "по предметам"},
         "prefer_teacher": {
             "называй преподавателей",
             "называй фамилии",
