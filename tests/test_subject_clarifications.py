@@ -87,6 +87,40 @@ def test_same_session_subject_clarification_keeps_tomorrow(subjects_client):
     assert "Математика" not in answer["response"]["text"]
 
 
+@pytest.mark.parametrize("user", [False, True])
+@pytest.mark.parametrize("command", ["предметы", "какие предметы завтра"])
+@pytest.mark.parametrize("exit_command", ["хватит", "спасибо"])
+def test_plain_launch_allows_subject_and_pair_followups_until_exit(
+    subjects_client, user, command, exit_command
+):
+    state_key = "user" if user else "application"
+    state = {state_key: {"group_id": GROUP, "lesson_label": "teacher"}}
+    welcome = post(subjects_client, new=True, user=user, state=state)
+    state["session"] = welcome["session_state"]
+    tomorrow = post(subjects_client, "завтра", user=user, state=state)
+    assert "Примерова" in tomorrow["response"]["text"]
+    assert "Компьютерные сети" not in tomorrow["response"]["text"]
+    assert tomorrow["response"]["end_session"] is False
+    state["session"] = tomorrow["session_state"]
+    subjects = post(subjects_client, command, user=user, state=state)
+    assert "Компьютерные сети" in subjects["response"]["text"]
+    assert "Программирование" in subjects["response"]["text"]
+    assert subjects["session_state"]["last_date"] == "2026-09-16"
+    assert subjects["response"]["end_session"] is False
+    assert "user_state_update" not in subjects and "application_state" not in subjects
+    state["session"] = subjects["session_state"]
+    pair = post(subjects_client, "а на второй", user=user, state=state)
+    assert pair["response"]["text"] == "Это пример расписания. 2-я — Программирование."
+    assert pair["response"]["end_session"] is False
+    state["session"] = pair["session_state"]
+    end = post(subjects_client, exit_command, user=user, state=state)
+    assert end["response"]["end_session"] is True
+
+
+def test_thanks_with_a_subject_question_is_not_an_exit():
+    assert detect_intent("спасибо а какие предметы завтра", NLU()) == "schedule"
+
+
 def test_specific_pair_selects_subject_without_changing_preference(subjects_client):
     answer = post(subjects_client, "какой предмет на второй паре завтра", state=saved())
     assert answer["response"]["text"] == "Это пример расписания. 2-я — Программирование."

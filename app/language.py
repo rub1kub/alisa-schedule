@@ -334,7 +334,17 @@ def detect_intent(command: str, nlu: NLU) -> str | None:
     text = normalize(command)
     if "YANDEX.HELP" in nlu.intents or text in {"помощь", "что ты умеешь", "что ты можешь"}:
         return "help"
-    if text in {"хватит", "стоп", "выход", "закрой навык", "до свидания"}:
+    if text in {
+        "хватит",
+        "стоп",
+        "выход",
+        "закрой навык",
+        "до свидания",
+        "спасибо",
+        "все",
+        "все спасибо",
+        "спасибо все",
+    }:
         return "exit"
     preferences = {
         "prefer_exit": {"выходи после ответа", "завершай после ответа", "включи автовыход"},

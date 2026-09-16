@@ -42,6 +42,7 @@ class Memory(BaseModel):
     pending_pair: int | None = Field(default=None, ge=1, le=12)
     last_pair: int | None = Field(default=None, ge=1, le=12)
     auto_exit: bool | None = None
+    interactive: bool = False
     pending_kind: Kind | None = None
     pending_date: date | None = None
     last_kind: Kind | None = None
@@ -60,6 +61,13 @@ def memory_from(request: AliceRequest) -> Memory:
         memory = Memory.model_validate({} if request.session.new else request.state.session)
     except ValidationError:
         memory = Memory()
+    if (
+        request.session.new
+        and request.request.type == "SimpleUtterance"
+        and not (request.request.command or request.request.original_utterance).strip()
+        and not request.request.payload
+    ):
+        memory.interactive = True
     state = request.state.user if request.session.authorized else request.state.application
     if not memory.group_id:
         value = state.get("group_id")
@@ -304,7 +312,11 @@ class Skill:
         )
 
     def auto_exit(self, memory: Memory) -> bool:
-        return self.responses.options.auto_exit if memory.auto_exit is None else memory.auto_exit
+        if memory.auto_exit is not None:
+            return memory.auto_exit
+        return self.responses.options.auto_exit and not (
+            self.responses.options.interactive_launch and memory.interactive
+        )
 
     def ask_group(self, request, memory, groups, prompt="ask_group", persist=False):
         examples = groups[:3]
@@ -480,7 +492,11 @@ class Skill:
         if intent == "forget":
             return self.reply(
                 request,
-                Memory(lesson_label=memory.lesson_label, auto_exit=memory.auto_exit),
+                Memory(
+                    lesson_label=memory.lesson_label,
+                    auto_exit=memory.auto_exit,
+                    interactive=memory.interactive,
+                ),
                 self.text("forget"),
                 persist=True,
             )

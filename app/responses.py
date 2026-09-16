@@ -82,6 +82,7 @@ TEMPLATE_FIELDS = {
 
 class ResponseOptions(DataModel):
     auto_exit: StrictBool = True
+    interactive_launch: StrictBool = True
     show_group: StrictBool = False
     teacher_lesson_label: Literal["group", "both"] = "group"
     lesson_label: LessonLabel = "auto"
