@@ -3,32 +3,95 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Кэпик — расписание колледжа в Telegram и Алисе</title>
-  <meta name="description" content="Кэпик помогает студентам Краснодарского колледжа электронного приборостроения узнать расписание. Telegram-бот ККЭПик и голосовой навык Алисы от rub1kub.">
-  <meta name="theme-color" content="#f5f3ec">
+  <title>Кэпик — расписание колледжа</title>
+  <meta name="description" content="Кэпик — расписание Краснодарского колледжа электронного приборостроения. Telegram-бот ККЭПик и навык Алисы от rub1kub.">
+  <meta name="theme-color" content="#111111">
   <link rel="canonical" href="https://kkepik.rub1kub.ru/about">
   <style>
-    :root{color-scheme:light;--paper:#f5f3ec;--ink:#252b24;--muted:#5a6357;--line:#d5d8ca;--green:#365d3f;--lime:#dfed97}
-    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:inherit;text-underline-offset:4px}a:focus-visible,summary:focus-visible{outline:3px solid var(--green);outline-offset:6px}.wrap{max-width:1140px;margin:auto;padding:0 40px}header{display:flex;align-items:center;justify-content:space-between;padding:29px 0;border-bottom:1px solid var(--line)}.brand{font-size:27px;font-weight:800;letter-spacing:-1px;text-decoration:none}.brand span{display:inline-block;width:14px;height:14px;margin-right:10px;background:var(--green);border-radius:4px;transform:rotate(-12deg)}nav{display:flex;gap:26px;font-size:14px}nav a{text-decoration:none}nav a:hover{text-decoration:underline}.hero{display:grid;grid-template-columns:1.15fr 1fr;gap:65px;align-items:center;padding:90px 0 80px}.eyebrow{font:12px/1.5 ui-monospace,monospace;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}h1{font-size:clamp(48px,6vw,76px);letter-spacing:-4px;line-height:1.03;margin:24px 0}h1 em{font-style:normal;color:var(--green)}.intro{max-width:470px;color:var(--muted);font-size:18px}.button{display:inline-flex;align-items:center;gap:28px;background:var(--green);color:white;text-decoration:none;padding:16px 23px;border-radius:10px;font-weight:600;margin-top:20px}.button:hover{background:#294a31}.hint{font-size:13px;color:var(--muted);margin-top:12px}.demo{background:#e7e9de;border-radius:24px;padding:30px;transform:rotate(2deg);box-shadow:0 20px 50px #303b2010}.demo-top{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:35px}.bubble{padding:18px 22px;border-radius:18px;font-size:21px;letter-spacing:-.4px}.question{background:var(--green);color:white;margin-left:32px;border-bottom-right-radius:4px}.answer{background:white;margin:18px 25px 0 0;border-bottom-left-radius:4px}.answer p{margin:0}.answer ol{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:10px}.answer li{display:flex;gap:18px;font-size:17px}.answer li span{color:var(--muted);font-size:13px;padding-top:3px}.demo-note{font-size:12px;color:var(--muted);margin:24px 0 0;text-align:center}.section{border-top:1px solid var(--line);padding:55px 0}.section-head{display:grid;grid-template-columns:1fr 2fr;gap:50px}h2{font-size:32px;line-height:1.15;letter-spacing:-1px;margin:0 0 24px}h3{font-size:19px;margin:0 0 10px}p{margin:0 0 16px}.steps{display:grid;grid-template-columns:1fr 1fr;gap:40px}.number{font:12px ui-monospace,monospace;color:var(--green);display:block;margin-bottom:14px}.steps p,.about-text{color:var(--muted)}.alice{background:var(--lime);padding:28px 30px;border-radius:16px;margin-top:35px}.status{display:inline-block;font:12px ui-monospace,monospace;border:1px solid #879953;border-radius:20px;padding:5px 10px;margin-bottom:16px}.alice p:last-child{margin-bottom:0}.commands{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}.commands span{border:1px solid #9aab6a;border-radius:8px;padding:8px 12px;font-size:14px}details{border-bottom:1px solid var(--line);padding:18px 0}summary{cursor:pointer;font-weight:600}details p{color:var(--muted);margin:14px 0 0}footer{border-top:1px solid var(--line);padding:26px 0 35px;display:flex;justify-content:space-between;gap:20px;font-size:13px;color:var(--muted)}footer a{margin-left:20px}.skip{position:absolute;left:10px;top:-100px}.skip:focus{top:10px;background:white;padding:10px;z-index:2}
-    @media(max-width:760px){.wrap{padding:0 22px}header{padding:22px 0}nav{gap:16px;font-size:13px}.hero{grid-template-columns:1fr;gap:38px;padding:48px 0}h1{letter-spacing:-2.5px}.intro{font-size:17px}.demo{transform:none;padding:23px}.demo-top{margin-bottom:24px}.section{padding:36px 0}.section-head{grid-template-columns:1fr;gap:10px}.steps{gap:24px}.alice{margin-top:25px;padding:24px}footer{flex-direction:column;gap:12px}footer a{margin-left:0;margin-right:20px}}@media(max-width:380px){.steps{grid-template-columns:1fr}.bubble{font-size:19px;padding:15px}.question{margin-left:16px}.answer{margin-right:5px}}
-    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+    :root {
+      color-scheme: dark;
+      --background: #111111;
+      --text: #f5f5f5;
+      --muted: #a2a2a2;
+      --red: #ef5555;
+      --blue: #588df4;
+      --green: #50b77b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    main {
+      min-height: 100vh;
+      min-height: 100svh;
+      display: grid;
+      place-items: center;
+      padding: 72px 24px;
+    }
+    .content { width: min(100%, 570px); text-align: center; }
+    h1 {
+      margin: 0;
+      font-size: clamp(68px, 12vw, 104px);
+      font-weight: 600;
+      letter-spacing: -.065em;
+      line-height: 1.12;
+    }
+    .colors { display: flex; justify-content: center; gap: 6px; margin: 25px 0 22px; }
+    .colors i { width: 24px; height: 3px; background: var(--red); }
+    .colors i:nth-child(2) { background: var(--blue); }
+    .colors i:nth-child(3) { background: var(--green); }
+    .tagline { margin: 0; color: #cccccc; font-size: 17px; line-height: 1.6; }
+    .links { display: flex; justify-content: center; flex-wrap: wrap; gap: 16px 29px; margin: 31px 0 0; }
+    a, summary { color: inherit; text-decoration: none; }
+    a:hover { text-decoration: underline; text-underline-offset: 5px; }
+    a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 6px; }
+    .telegram { color: var(--blue); }
+    .source { color: var(--green); }
+    .contact { color: var(--red); }
+    details { margin-top: 29px; }
+    summary { display: inline-block; color: var(--muted); font-size: 14px; cursor: pointer; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: " +"; }
+    details[open] summary::after { content: " −"; }
+    summary:hover { color: var(--text); }
+    .about { margin: 25px auto 0; max-width: 490px; color: var(--muted); font-size: 14px; line-height: 1.8; }
+    .about p { margin: 0 0 16px; }
+    .about a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+    .about p:last-child { margin-bottom: 0; }
+    .author { margin: 29px 0 0; color: #929292; font-size: 12px; }
+    @media (max-width: 420px) {
+      main { padding: 52px 22px; }
+      .tagline { font-size: 16px; }
+      .links { gap: 15px 22px; font-size: 15px; }
+    }
   </style>
 </head>
 <body>
-<a class="skip" href="#main">К содержанию</a>
-<div class="wrap">
-  <header><a class="brand" href="/about" aria-label="Кэпик, главная"><span aria-hidden="true"></span>Кэпик</a><nav aria-label="Навигация"><a href="#alice">В Алисе</a><a href="#project">О проекте</a></nav></header>
-  <main id="main">
-    <section class="hero" aria-labelledby="title">
-      <div><div class="eyebrow">Для студентов колледжа</div><h1 id="title">Что у нас<br><em>завтра?</em></h1><p class="intro">Кэпик подскажет, какие пары и кто ведёт. Расписание Краснодарского колледжа электронного приборостроения — в Telegram и голосом.</p><a class="button" href="https://t.me/kkepik_bot">Открыть Telegram-бота <span aria-hidden="true">↗</span></a><p class="hint">@kkepik_bot · группа выбирается один раз</p></div>
-      <div class="demo" aria-label="Пример разговора с навыком"><div class="demo-top"><span>КЭПИК / ПРИМЕР</span><span>Голосовое расписание</span></div><div class="bubble question">Какие предметы завтра?</div><div class="bubble answer"><p>Две пары.</p><ol><li><span>01</span>Математика</li><li><span>02</span>История</li></ol></div><p class="demo-note">Вымышленное расписание для примера</p></div>
-    </section>
-    <section class="section" id="alice" aria-labelledby="alice-title">
-      <div class="section-head"><h2 id="alice-title">Спросить<br>голосом</h2><div><div class="steps"><div><span class="number">01 / ВЫБРАТЬ ГРУППУ</span><h3>Один раз познакомиться</h3><p>Назовите свою группу. Навык запомнит её для следующих обращений.</p></div><div><span class="number">02 / СПРОСИТЬ</span><h3>Как спросили бы одногруппника</h3><p>«Что завтра», «какая первая», «сколько пар». Можно узнать расписание другой группы или преподавателя.</p></div></div><div class="alice"><span class="status">Навык готовится к публикации</span><h3>Кэпик в Алисе</h3><p>На первом курсе по умолчанию звучат предметы, на старших — фамилии. Скажите «называй предметы», чтобы сменить формат.</p><p>В открытом разговоре можно уточнить «а предметы?». «Спасибо» завершает разговор. При запуске сразу с вопросом навык выходит после полного ответа.</p><div class="commands" aria-label="Примеры вопросов"><span>Что на пятницу?</span><span>Какая последняя пара?</span><span>Ко скольки завтра?</span></div></div></div></div>
-    </section>
-    <section class="section" id="project" aria-labelledby="project-title"><div class="section-head"><h2 id="project-title">О Кэпике</h2><div><p>Кэпик — проект разработчика <a href="https://rub1kub.ru">rub1kub</a> для студентов и преподавателей Краснодарского колледжа электронного приборостроения.</p><p class="about-text">В Telegram бот проекта называется «ККЭПик» и доступен как <a href="https://t.me/kkepik_bot">@kkepik_bot</a>. «Кэпик» — короткое название проекта и его голосового навыка. Бот получает расписание колледжа, а навык использует его данные.</p><p class="about-text">Это независимый студенческий проект. Расписание зависит от публикаций колледжа; если данных на выбранный день ещё нет, навык скажет об этом.</p><details><summary>Можно выбрать предметы вместо фамилий?</summary><p>Да. «Называй предметы» сохраняет этот формат. «Называй фамилии» переключает обратно. Вопрос «какие предметы завтра» меняет только один ответ.</p></details><details><summary>Что запоминает навык?</summary><p>Группу, формат ответа и выбранный режим выхода. Они хранятся средствами Яндекс Диалогов. «Забудь группу» удаляет выбор группы. День и уточнения сохраняются только в текущем разговоре.</p></details></div></div></section>
+  <main>
+    <div class="content">
+      <h1>Кэпик</h1>
+      <div class="colors" aria-hidden="true"><i></i><i></i><i></i></div>
+      <p class="tagline">Расписание колледжа.</p>
+      <nav class="links" aria-label="Ссылки проекта">
+        <a class="telegram" href="https://t.me/kkepik_bot">Telegram</a>
+        <a class="source" href="https://github.com/rub1kub/alisa-schedule">Исходники</a>
+        <a class="contact" href="https://t.me/kkepuk">Связь</a>
+      </nav>
+      <details>
+        <summary>О проекте</summary>
+        <div class="about">
+          <p>Кэпик — проект разработчика <a href="https://rub1kub.ru/">rub1kub</a> для студентов Краснодарского колледжа электронного приборостроения.</p>
+          <p>Наш Telegram-бот называется «ККЭПик»: <a href="https://t.me/kkepik_bot">@kkepik_bot</a>. Он получает расписание колледжа. «Кэпик» — короткое название проекта и его голосового навыка.</p>
+          <p>Навык готовится к публикации. В Алисе можно будет спросить расписание группы или преподавателя, первую пару и количество занятий. Предметы или фамилии — на ваш выбор.</p>
+          <p>Независимый студенческий проект.</p>
+        </div>
+      </details>
+      <p class="author">от <a href="https://rub1kub.ru/">rub1kub</a></p>
+    </div>
   </main>
-  <footer><span>Кэпик · проект rub1kub</span><div><a href="https://t.me/kkepuk">Обратная связь</a><a href="https://github.com/rub1kub/alisa-schedule">Код навыка</a></div></footer>
-</div>
 </body>
 </html>
