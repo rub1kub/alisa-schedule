@@ -1,10 +1,11 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import ValidationError
 
 from app.config import Settings
@@ -63,6 +64,21 @@ def create_app(settings: Settings | None = None, provider=None, now=None) -> Fas
         redoc_url=None,
         openapi_url=None,
     )
+
+    @app.api_route("/about", methods=["GET", "HEAD"])
+    async def about():
+        return FileResponse(
+            Path(__file__).parent / "static" / "about.html",
+            media_type="text/html",
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+
+    @app.api_route("/yandex_f031293cd6d4c038.html", methods=["GET", "HEAD"])
+    async def site_verification():
+        return FileResponse(
+            Path(__file__).parent / "static" / "yandex_f031293cd6d4c038.html",
+            media_type="text/html",
+        )
 
     @app.get("/healthz")
     async def healthz():
