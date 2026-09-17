@@ -332,7 +332,15 @@ def parse_date(command: str, nlu: NLU, today: date) -> DateSelection:
 
 def detect_intent(command: str, nlu: NLU) -> str | None:
     text = normalize(command)
-    if "YANDEX.HELP" in nlu.intents or text in {"помощь", "что ты умеешь", "что ты можешь"}:
+    if text in {"что ты умеешь", "что ты можешь", "что умеешь", "что можешь", "твои возможности"}:
+        return "capabilities"
+    if "YANDEX.HELP" in nlu.intents or text in {
+        "помощь",
+        "помоги",
+        "справка",
+        "как пользоваться",
+        "как тобой пользоваться",
+    }:
         return "help"
     if text in {
         "хватит",

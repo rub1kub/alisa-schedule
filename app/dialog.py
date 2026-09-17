@@ -487,8 +487,17 @@ class Skill:
         intent = detect_intent(command, utterance.nlu)
         if intent == "exit":
             return self.reply(request, memory, self.text("exit"), end=True)
-        if intent == "help":
-            return self.reply(request, memory, self.text("help"), end=self.auto_exit(memory))
+        if intent in {"help", "capabilities"}:
+            clarifying = (
+                memory.awaiting_group
+                or memory.awaiting_teacher
+                or memory.awaiting_date
+                or memory.awaiting_pair
+                or memory.cursor
+            )
+            return self.reply(
+                request, memory, self.text(intent), end=self.auto_exit(memory) and not clarifying
+            )
         if intent == "forget":
             return self.reply(
                 request,

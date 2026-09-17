@@ -1,6 +1,6 @@
 {
   "skill_id": "e1db3ff8-41a7-4a69-bf69-1bb1de58d666",
-  "status": "moderation",
+  "status": "rejected",
   "name": "Расписание Кэпика",
   "console_url": "https://dialogs.yandex.ru/developer/skills/e1db3ff8-41a7-4a69-bf69-1bb1de58d666/draft/settings/main",
   "webhook_url": "https://kkepik.rub1kub.ru/alice/webhook",

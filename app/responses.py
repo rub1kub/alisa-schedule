@@ -13,6 +13,7 @@ LessonLabel = Literal["auto", "subject", "teacher", "both"]
 # Only named placeholders are allowed. Sizes cover the validated source fields.
 TEMPLATE_FIELDS = {
     "help": {},
+    "capabilities": {},
     "exit": {},
     "forget": {},
     "my_group": {"group": 200},
@@ -102,6 +103,8 @@ class Responses(DataModel):
     def validate_templates(self):
         if set(self.texts) != set(TEMPLATE_FIELDS):
             raise ValueError("Response template keys must match TEMPLATE_FIELDS")
+        if self.texts["help"].strip().casefold() == self.texts["capabilities"].strip().casefold():
+            raise ValueError("Help and capabilities must have different texts")
         for key, limits in TEMPLATE_FIELDS.items():
             template = self.texts[key]
             if not template.strip() or len(template) > 600:
