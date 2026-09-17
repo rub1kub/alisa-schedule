@@ -711,7 +711,8 @@ class Skill:
             memory.pending_kind = kind or memory.pending_kind
             memory.pending_label = query_label or memory.pending_label
             memory.pending_date = selection.value or memory.pending_date
-            return self.ask_group(request, memory, groups)
+            prompt = "welcome_group" if request.session.new and not normalized else "ask_group"
+            return self.ask_group(request, memory, groups, prompt)
         if more:
             kind = memory.last_kind
         kind = kind or (memory.pending_kind if memory.awaiting_date else None)

@@ -66,6 +66,7 @@ def create_app(settings: Settings | None = None, provider=None, now=None) -> Fas
     )
 
     @app.api_route("/about", methods=["GET", "HEAD"])
+    @app.api_route("/about/", methods=["GET", "HEAD"])
     async def about():
         return FileResponse(
             Path(__file__).parent / "static" / "about.html",

@@ -19,6 +19,7 @@ TEMPLATE_FIELDS = {
     "my_group": {"group": 200},
     "no_group": {},
     "ask_group": {},
+    "welcome_group": {},
     "ambiguous_group": {"groups": 604},
     "unknown_group": {},
     "group_not_understood": {},

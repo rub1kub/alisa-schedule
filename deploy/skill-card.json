@@ -14,9 +14,7 @@
   "screen_required": false,
   "icon": "assets/skill-icon.png",
   "activation_names": [
-    "Кэпика",
-    "Расписание Кэпика",
-    "Расписания Кэпика"
+    "Кэпика"
   ],
   "brand_website": "https://kkepik.rub1kub.ru/about"
 }
