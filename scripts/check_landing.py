@@ -6,7 +6,7 @@ from urllib.request import Request, urlopen
 def main():
     checks = 0
     for scheme in ("http", "https"):
-        for path in ("/about", "/about/", "/about?from=dialogs", "/about/?from=dialogs"):
+        for path in ("/", "/about", "/about/", "/about?from=dialogs", "/about/?from=dialogs"):
             for method in ("GET", "HEAD"):
                 url = f"{scheme}://kkepik.rub1kub.ru{path}"
                 request = Request(url, method=method)
