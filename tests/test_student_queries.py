@@ -302,7 +302,7 @@ def test_date_number_cannot_select_group_during_onboarding(targets_client, monke
 
     monkeypatch.setattr(targets_client.app.state.skill.provider, "groups", groups)
     asked = post(targets_client, "расписание на 16 сентября", new=True)
-    assert "Какая группа" in asked["response"]["text"]
+    assert "группу или фамилию" in asked["response"]["text"]
     assert "application_state" not in asked
     result = post(targets_client, "103", state=follow(asked))
     assert result["session_state"]["last_date"] == "2026-09-16"

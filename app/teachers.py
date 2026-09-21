@@ -2,12 +2,53 @@
 
 import re
 
-from app.language import MONTHS, WEEKDAYS, normalize, number_words
+from app.language import MONTHS, WEEKDAYS, group_fragment, normalize, number_words
 from app.models import Teacher
 
 
 def teacher_key(name: str) -> str:
     return normalize(name)
+
+
+def profile_name_candidate(command: str) -> bool:
+    """Exclude date-only and setup commands before looking up a bare surname."""
+    stop = {
+        "сегодня",
+        "завтра",
+        "послезавтра",
+        "вчера",
+        "на",
+        "в",
+        "во",
+        "через",
+        "день",
+        "дня",
+        "дней",
+        "неделю",
+        "следующий",
+        "следующую",
+        "этот",
+        "эту",
+        "смени",
+        "сменить",
+        "поменяй",
+        "выбери",
+        "выбрать",
+        "измени",
+        "изменить",
+        "запомни",
+        "расписание",
+        "профиль",
+        "мой",
+        "мое",
+        "мою",
+        "пожалуйста",
+        "и",
+        "или",
+    }
+    stop.update(MONTHS)
+    stop.update(form for forms in WEEKDAYS for form in forms)
+    return any(word not in stop and not word.isdigit() for word in group_fragment(command).split())
 
 
 def teacher_names(value: str) -> list[str]:

@@ -138,7 +138,7 @@ def test_first_actual_pair_and_exact_slot_one_are_different(subjects_client):
 
 def test_pair_number_and_subject_mode_survive_initial_group_question(subjects_client):
     asked = post(subjects_client, "что на второй паре завтра", new=True)
-    assert "Какая группа" in asked["response"]["text"]
+    assert "группу или фамилию" in asked["response"]["text"]
     answer = post(subjects_client, "103", state=follow_state(asked))
     assert "2-я — Программирование" in answer["response"]["text"]
     assert "Компьютерные сети" not in answer["response"]["text"]

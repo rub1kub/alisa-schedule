@@ -11,7 +11,7 @@ def test_blank_launch_explains_purpose_and_next_command(client, known_group, use
     result = post(client, new=True, user=user, state=state)
     text = result["response"]["text"]
     assert "Кэпик" in text and "расписание колледжа" in text
-    assert ("что завтра" if known_group else "сто три") in text
+    assert ("что завтра" if known_group else "группу или фамилию") in text
     assert result["response"]["end_session"] is False
     assert "application_state" not in result and "user_state_update" not in result
     if not known_group:

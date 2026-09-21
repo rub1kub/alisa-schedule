@@ -18,6 +18,10 @@ TEMPLATE_FIELDS = {
     "forget": {},
     "my_group": {"group": 200},
     "no_group": {},
+    "my_teacher": {"teacher": 200},
+    "no_profile": {},
+    "ask_profile": {},
+    "teacher_saved": {"teacher": 200},
     "ask_group": {},
     "welcome_group": {},
     "ambiguous_group": {"groups": 604},
@@ -28,6 +32,7 @@ TEMPLATE_FIELDS = {
     "unknown_request": {},
     "prefer_subject": {},
     "prefer_teacher": {},
+    "prefer_groups": {},
     "prefer_both": {},
     "prefer_auto": {},
     "failure": {},
@@ -78,6 +83,7 @@ TEMPLATE_FIELDS = {
     "button_tomorrow": {},
     "button_change": {},
     "button_groups": {},
+    "button_teacher": {},
     "button_more": {},
 }
 

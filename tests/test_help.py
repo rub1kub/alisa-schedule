@@ -29,8 +29,8 @@ def test_help_and_capabilities_are_distinct_without_loading_schedules(client, mo
     capabilities = post(client, "что ты умеешь", new=True)
     help_answer = post(client, "помощь", new=True)
     assert capabilities["response"]["text"] != help_answer["response"]["text"]
-    assert "«смени группу»" in help_answer["response"]["text"]
-    assert "«смени группу»" not in capabilities["response"]["text"]
+    assert "«смени расписание»" in help_answer["response"]["text"]
+    assert "«смени расписание»" not in capabilities["response"]["text"]
     assert "application_state" not in help_answer
     assert "application_state" not in capabilities
 

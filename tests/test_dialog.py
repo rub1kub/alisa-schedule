@@ -23,7 +23,7 @@ def chosen_state():
 
 def test_first_request_keeps_tomorrow_while_asking_for_group(client):
     initial = post(client, "что завтра", new=True)
-    assert "Какая группа?" in initial["response"]["text"]
+    assert "группу или фамилию" in initial["response"]["text"]
     assert initial["response"]["end_session"] is False
     result = post(client, "группа сто три", state={"session": initial["session_state"]})
     assert result["session_state"]["last_date"] == "2026-09-16"
@@ -64,7 +64,7 @@ def test_authorized_user_state_wins_over_other_surface_and_forget_clears_it(clie
 
 def test_new_account_does_not_inherit_guest_choice(client):
     result = post(client, "что завтра", new=True, user=True, state=chosen_state())
-    assert "Какая группа?" in result["response"]["text"]
+    assert "группу или фамилию" in result["response"]["text"]
 
 
 @pytest.mark.parametrize(
