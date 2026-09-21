@@ -6,7 +6,16 @@ from urllib.request import Request, urlopen
 def main():
     checks = 0
     for scheme in ("http", "https"):
-        for path in ("/", "/about", "/about/", "/about?from=dialogs", "/about/?from=dialogs"):
+        for path in (
+            "/",
+            "/about",
+            "/about/",
+            "/about?from=dialogs",
+            "/about/?from=dialogs",
+            "/guide",
+            "/guide/",
+            "/guide?from=landing",
+        ):
             for method in ("GET", "HEAD"):
                 url = f"{scheme}://kkepik.rub1kub.ru{path}"
                 request = Request(url, method=method)
@@ -16,7 +25,10 @@ def main():
                     if response.url != url:
                         raise RuntimeError(f"Unexpected landing redirect: {method} {url}")
                     body = response.read().decode("utf-8")
-                    if method == "GET" and "Кэпик — проект" not in body:
+                    expected = (
+                        "Спроси Кэпика." if path.startswith("/guide") else "Кэпик — мой проект"
+                    )
+                    if method == "GET" and expected not in body:
                         raise RuntimeError(f"Unexpected page: {url}")
                     if method == "HEAD" and body:
                         raise RuntimeError(f"HEAD returned a body: {url}")

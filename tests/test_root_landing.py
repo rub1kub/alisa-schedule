@@ -26,7 +26,7 @@ def test_integration_preserves_app_and_scopes_landing():
     assert 'media="not all"' in index
     assert "#kepik-landing h1" in fragment
     assert "html.kepik-miniapp #kepik-landing { display: none; }" in fragment
-    assert "Кэпик — проект" in fragment
+    assert "Кэпик — мой проект" in fragment
     with pytest.raises(ValueError):
         integrate(index, (ROOT / "app/static/about.html").read_text())
 

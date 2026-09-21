@@ -116,3 +116,7 @@ mv data/overrides.local.json data/overrides.json
 `docker compose logs --tail=50 skill` показывает типы ошибок без текстов запросов, пользовательских ID и ответов API. Размер логов ограничен. Автообновление контейнера через Watchtower отключено.
 
 Текущие проверки и ограничения перечислены в [VERIFICATION.md](VERIFICATION.md). Время первой пары берётся из таблицы звонков в `college.json`; при изменении звонков обновите её и перезапустите навык.
+
+## Обновление публичной инструкции
+
+`app/static/guide.html` доступен по `/guide` и `/guide/` через отдельный блок в `deploy/apache-brand.conf`. Страница и HTML лендинга входят в Docker-образ; после изменения нужен rebuild. Для обновления главной страницы веб-приложения сформируйте `kepik_landing.html` скриптом `scripts/prepare_root_landing.py` из резервной копии исходного `index.html`, замените только фрагмент в `templates/` и обновите время `app.wsgi`. Сам `index.html` и `kepik-entry.js` при правках текста повторно заменять не требуется. Проверка публичных адресов: `python -m scripts.check_landing`.

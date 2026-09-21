@@ -6,7 +6,7 @@
   <title>Кэпик — расписание колледжа</title>
   <meta name="description" content="Кэпик — расписание Краснодарского колледжа электронного приборостроения. Telegram-бот ККЭПик и навык Алисы от rub1kub.">
   <meta name="theme-color" content="#111111">
-  <link rel="canonical" href="https://kkepik.rub1kub.ru/about">
+  <link rel="canonical" href="https://kkepik.rub1kub.ru/">
   <style>
     :root {
       color-scheme: dark;
@@ -32,7 +32,7 @@
       place-items: center;
       padding: 72px 24px;
     }
-    .content { width: min(100%, 570px); text-align: center; }
+    .content { width: min(100%, 640px); text-align: center; }
     h1 {
       margin: 0;
       font-size: clamp(68px, 12vw, 104px);
@@ -52,6 +52,9 @@
     .telegram { color: var(--blue); }
     .source { color: var(--green); }
     .contact { color: var(--red); }
+    .api { color: #cccccc; }
+    .guide { margin: 28px 0 0; font-size: 15px; }
+    .guide a { text-decoration: underline; text-decoration-color: #555; text-underline-offset: 6px; }
     details { margin-top: 29px; }
     summary { display: inline-block; color: var(--muted); font-size: 14px; cursor: pointer; list-style: none; }
     summary::-webkit-details-marker { display: none; }
@@ -75,18 +78,20 @@
     <div class="content">
       <h1>Кэпик</h1>
       <div class="colors" aria-hidden="true"><i></i><i></i><i></i></div>
-      <p class="tagline">Расписание колледжа.</p>
+      <p class="tagline">Расписание колледжа — в Telegram и Алисе.</p>
       <nav class="links" aria-label="Ссылки проекта">
-        <a class="telegram" href="https://t.me/kkepik_bot">Telegram</a>
-        <a class="source" href="https://github.com/rub1kub/alisa-schedule">Исходники</a>
-        <a class="contact" href="https://t.me/kkepuk">Связь</a>
+        <a class="telegram" href="https://t.me/kkepik_bot">Бот в Telegram</a>
+        <a class="api" href="https://kkepik.rub1kub.ru/api/docs/#/">API</a>
+        <a class="source" href="https://github.com/rub1kub/alisa-schedule" aria-label="Исходники навыка Алисы">Исходники</a>
+        <a class="contact" href="https://t.me/kkepuk">Поддержка</a>
       </nav>
+      <p class="guide"><a href="/guide">Как спросить Алису →</a></p>
       <details>
         <summary>О проекте</summary>
         <div class="about">
-          <p>Кэпик — проект разработчика <a href="https://rub1kub.ru/">rub1kub</a> для студентов Краснодарского колледжа электронного приборостроения.</p>
-          <p>Наш Telegram-бот называется «ККЭПик»: <a href="https://t.me/kkepik_bot">@kkepik_bot</a>. Он получает расписание колледжа. «Кэпик» — короткое название проекта и его голосового навыка.</p>
-          <p>Навык готовится к публикации. В Алисе можно будет спросить расписание группы или преподавателя, первую пару и количество занятий. Предметы или фамилии — на ваш выбор.</p>
+          <p>Кэпик — мой проект для студентов Краснодарского колледжа электронного приборостроения. Я <a href="https://rub1kub.ru/">rub1kub</a>, его разработчик.</p>
+          <p>Мой Telegram-бот «ККЭПик» — <a href="https://t.me/kkepik_bot">@kkepik_bot</a> — получает расписание колледжа. «Кэпик» — короткое название проекта и его голосового навыка.</p>
+          <p>Навык «Кэпик» уже опубликован. Спросите у Алисы расписание группы или преподавателя, первую пару и количество занятий. Предметы или фамилии — на ваш выбор.</p>
           <p>Независимый студенческий проект.</p>
         </div>
       </details>

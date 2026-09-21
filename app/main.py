@@ -74,6 +74,15 @@ def create_app(settings: Settings | None = None, provider=None, now=None) -> Fas
             headers={"Cache-Control": "public, max-age=300"},
         )
 
+    @app.api_route("/guide", methods=["GET", "HEAD"])
+    @app.api_route("/guide/", methods=["GET", "HEAD"])
+    async def guide():
+        return FileResponse(
+            Path(__file__).parent / "static" / "guide.html",
+            media_type="text/html",
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+
     @app.api_route("/yandex_f031293cd6d4c038.html", methods=["GET", "HEAD"])
     async def site_verification():
         return FileResponse(
