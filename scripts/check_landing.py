@@ -26,7 +26,9 @@ def main():
                         raise RuntimeError(f"Unexpected landing redirect: {method} {url}")
                     body = response.read().decode("utf-8")
                     expected = (
-                        "Спроси Кэпика." if path.startswith("/guide") else "Кэпик — мой проект"
+                        "Спроси Кэпика."
+                        if path.startswith("/guide")
+                        else "Расписание колледжа в Алисе"
                     )
                     if method == "GET" and expected not in body:
                         raise RuntimeError(f"Unexpected page: {url}")

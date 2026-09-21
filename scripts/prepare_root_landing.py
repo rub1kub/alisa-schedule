@@ -8,6 +8,7 @@ from pathlib import Path
 def integrate(original: str, landing: str) -> tuple[str, str]:
     if 'id="kepik-landing"' in original or "kepik_landing.html" in original:
         raise ValueError("Template already integrated; use its original backup")
+    prepaint = (Path(__file__).resolve().parents[1] / "deploy/miniapp/prepaint.js").read_text()
     css = re.search(r"<style>(.*?)</style>", landing, re.S).group(1)
 
     def scope(match):
@@ -32,13 +33,19 @@ html:not(.kepik-miniapp) body { margin: 0; padding: 0; display: block; backgroun
 #kepik-miniapp { display: none; }
 html.kepik-miniapp #kepik-miniapp { display: contents; }
 html.kepik-miniapp #kepik-landing { display: none; }
+html.kepik-telegram-pending #kepik-landing { display: none; }
 </style>
 <section id="kepik-landing" aria-label="Кэпик — расписание колледжа">
 """
         + content
         + "\n</section>\n"
     )
+    assert original.count("<head>") == original.count("</title>") == 1
     result = original.replace(
+        "</title>",
+        "</title>\n    <script data-kepik-prepaint>\n" + prepaint + "</script>",
+    )
+    result = result.replace(
         "<title>KKEPIK</title>",
         "<title>Кэпик — расписание колледжа</title>\n"
         '    <meta name="description" content="Кэпик — расписание Краснодарского колледжа '
@@ -58,7 +65,7 @@ html.kepik-miniapp #kepik-landing { display: none; }
     )
     assert result.count(sdk) == 1
     result = result.replace(
-        sdk, sdk + '\n    <script defer src="/static/js/kepik-entry.js?v=20260918-1"></script>'
+        sdk, sdk + '\n    <script defer src="/static/js/kepik-entry.js?v=20260921-2"></script>'
     )
     assert result.count("<body>") == result.count("</body>") == 1
     result = result.replace(
